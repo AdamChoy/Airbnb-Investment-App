@@ -1,0 +1,2 @@
+# Airbnb-Investment-App
+An interactive data app for UK short-term rental investment analysis. Combines Inside Airbnb market data with AI-generated recommendations to help investors compare cities, neighbourhoods, property types, and revenue potential with transparent assumptions and regulation alerts.
