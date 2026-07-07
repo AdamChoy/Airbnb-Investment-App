@@ -1,0 +1,406 @@
+import pandas as pd
+import streamlit as st
+
+st.set_page_config(page_title="InvestStay", layout="wide")
+
+# -----------------------------
+# LOAD DATA
+# -----------------------------
+lad_df = pd.read_csv("lad_investment_summary.csv")
+msoa_df = pd.read_csv("msoa_investment_summary.csv")
+
+# -----------------------------
+# STYLE
+# -----------------------------
+st.markdown("""
+<style>
+[data-testid="stSidebar"] {
+    background-color: #F3FBFA;
+}
+
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p {
+    color: #0D223F;
+}
+
+.main-title {
+    font-size: 42px;
+    font-weight: 800;
+    color: #0D223F;
+}
+
+.teal {
+    color: #00A99D;
+}
+
+.card {
+    background-color: white;
+    padding: 24px;
+    border-radius: 18px;
+    border: 1px solid #D9F3F0;
+    box-shadow: 0px 4px 12px rgba(0,0,0,0.05);
+}
+
+.score {
+    font-size: 54px;
+    font-weight: 800;
+    color: #00A99D;
+}
+
+.stButton > button {
+    background-color: #00A99D;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 0.7rem 1.2rem;
+    font-weight: 600;
+}
+
+.stButton > button:hover {
+    background-color: #008C84;
+    color: white;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# -----------------------------
+# SCORING
+# -----------------------------
+def normalise(series):
+    if series.max() == series.min():
+        return series * 0
+    return ((series - series.min()) / (series.max() - series.min())) * 100
+
+def add_investment_score(df):
+    df = df.copy()
+
+    df["revenue_score"] = normalise(df["str_annual_revenue_est"])
+    df["occupancy_proxy"] = 365 - df["avg_availability_365"]
+    df["occupancy_score"] = normalise(df["occupancy_proxy"])
+    df["str_yield_score"] = normalise(df["str_gross_yield"])
+    df["yield_gap_score"] = normalise(df["str_vs_ltr_yield_delta"])
+    df["saturation_score"] = 100 - normalise(df["total_listings"])
+
+    df["investment_score"] = (
+        0.30 * df["revenue_score"]
+        + 0.25 * df["occupancy_score"]
+        + 0.25 * df["str_yield_score"]
+        + 0.10 * df["yield_gap_score"]
+        + 0.10 * df["saturation_score"]
+    ).round(1)
+
+    return df
+
+lad_df = add_investment_score(lad_df)
+msoa_df = add_investment_score(msoa_df)
+
+# -----------------------------
+# SESSION STATE
+# -----------------------------
+if "page" not in st.session_state:
+    st.session_state.page = "Home"
+
+# -----------------------------
+# LEFT SIDEBAR = INPUTS ONLY
+# -----------------------------
+with st.sidebar:
+    st.image("investstay_logo.png", use_container_width=True)
+
+    st.header("Search Inputs")
+
+    city = st.selectbox(
+        "Select City",
+        sorted(lad_df["city"].dropna().unique())
+    )
+
+    budget = st.slider(
+        "Investment Budget (£)",
+        50000,
+        1000000,
+        250000,
+        step=10000
+    )
+
+    profile = st.selectbox(
+        "Investor Profile",
+        ["First-time investor", "Multi-property host"]
+    )
+
+    rooms = st.selectbox(
+        "Bedrooms",
+        [1, 2, 3, 4, 5]
+    )
+
+    analyse = st.button("Analyse Investment")
+
+    if analyse:
+        st.session_state.page = "Dashboard"
+
+# -----------------------------
+# FILTER DATA
+# -----------------------------
+city_df = lad_df[lad_df["city"] == city].copy()
+
+if "median_house_price_2025_lad" in city_df.columns:
+    city_df = city_df[city_df["median_house_price_2025_lad"] <= budget]
+
+if city_df.empty:
+    best_area = None
+    st.warning("No areas match this budget. Try increasing the budget.")
+else:
+    best_area = city_df.sort_values("investment_score", ascending=False).iloc[0]
+
+# -----------------------------
+# MAIN HEADER
+# -----------------------------
+st.markdown(
+    '<div class="main-title">Welcome to <span class="teal">InvestStay</span></div>',
+    unsafe_allow_html=True
+)
+
+st.write("Smart Data. Smart Investments.")
+
+# -----------------------------
+# MAIN PAGE NAVIGATION BUTTONS
+# -----------------------------
+nav1, nav2, nav3, nav4, nav5, nav6 = st.columns(6)
+
+with nav1:
+    if st.button("Home"):
+        st.session_state.page = "Home"
+
+with nav2:
+    if st.button("Dashboard"):
+        st.session_state.page = "Dashboard"
+
+with nav3:
+    if st.button("Score Breakdown"):
+        st.session_state.page = "Score Breakdown"
+
+with nav4:
+    if st.button("Compare Areas"):
+        st.session_state.page = "Compare Areas"
+
+with nav5:
+    if st.button("Recommendation"):
+        st.session_state.page = "Recommendation"
+
+with nav6:
+    if st.button("Risks"):
+        st.session_state.page = "Risks"
+
+st.divider()
+
+# -----------------------------
+# HOME PAGE
+# -----------------------------
+if st.session_state.page == "Home":
+
+    st.subheader("Find the best area to invest in")
+
+    col1, col2 = st.columns([1.5, 1])
+
+    with col1:
+        st.markdown(
+            """
+            <div class="card">
+            <h3>What does this app do?</h3>
+            <p>
+            InvestStay helps property investors compare short-term rental income,
+            long-term rental yield, demand, market saturation and review quality.
+            </p>
+            <p>
+            Enter your search inputs on the left, then click Analyse Investment.
+            </p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with col2:
+        st.markdown(
+            f"""
+            <div class="card">
+            <h3>Your Search</h3>
+            <p><b>City:</b> {city}</p>
+            <p><b>Budget:</b> £{budget:,}</p>
+            <p><b>Investor Type:</b> {profile}</p>
+            <p><b>Bedrooms:</b> {rooms}</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+# -----------------------------
+# DASHBOARD PAGE
+# -----------------------------
+elif st.session_state.page == "Dashboard":
+
+    st.subheader("Investment Dashboard")
+
+    if best_area is None:
+        st.warning("No data available.")
+    else:
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown(
+                f"""
+                <div class="card">
+                <p>Investment Score</p>
+                <div class="score">{best_area['investment_score']}/100</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        with col2:
+            st.metric("Recommended Area", best_area["lad_name"])
+            st.metric("STR Yield", f"{best_area['str_gross_yield']:.2%}")
+
+        with col3:
+            st.metric("LTR Yield", f"{best_area['ltr_gross_yield']:.2%}")
+            st.metric("Estimated STR Revenue", f"£{best_area['str_annual_revenue_est']:,.0f}")
+
+        st.subheader("Top 5 Investment Areas")
+
+        top5 = city_df.sort_values("investment_score", ascending=False).head(5)
+
+        st.dataframe(
+            top5[
+                [
+                    "lad_name",
+                    "investment_score",
+                    "str_gross_yield",
+                    "ltr_gross_yield",
+                    "str_annual_revenue_est",
+                    "total_listings"
+                ]
+            ],
+            use_container_width=True
+        )
+
+# -----------------------------
+# SCORE BREAKDOWN
+# -----------------------------
+elif st.session_state.page == "Score Breakdown":
+
+    st.subheader("Score Breakdown")
+
+    if best_area is None:
+        st.warning("No data available.")
+    else:
+        breakdown = pd.DataFrame({
+            "Metric": [
+                "Revenue Score",
+                "Occupancy Score",
+                "STR Yield Score",
+                "Yield Gap Score",
+                "Saturation Score"
+            ],
+            "Score": [
+                best_area["revenue_score"],
+                best_area["occupancy_score"],
+                best_area["str_yield_score"],
+                best_area["yield_gap_score"],
+                best_area["saturation_score"]
+            ]
+        })
+
+        st.bar_chart(breakdown.set_index("Metric"))
+
+        st.markdown(
+            """
+            <div class="card">
+            <h3>How the score works</h3>
+            <p>The investment score combines revenue, occupancy, short-term rental yield,
+            yield gap and market saturation into one overall score out of 100.</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+# -----------------------------
+# COMPARE AREAS
+# -----------------------------
+elif st.session_state.page == "Compare Areas":
+
+    st.subheader(f"Compare Areas in {city}")
+
+    ranked = city_df.sort_values("investment_score", ascending=False)
+
+    cols = [
+        "lad_name",
+        "investment_score",
+        "str_gross_yield",
+        "ltr_gross_yield",
+        "str_vs_ltr_yield_delta",
+        "str_annual_revenue_est",
+        "avg_nightly_price",
+        "total_listings",
+        "avg_review_score"
+    ]
+
+    available_cols = [c for c in cols if c in ranked.columns]
+
+    st.dataframe(ranked[available_cols], use_container_width=True)
+
+    st.subheader("Investment Score Ranking")
+    st.bar_chart(ranked.set_index("lad_name")["investment_score"])
+
+# -----------------------------
+# RECOMMENDATION
+# -----------------------------
+elif st.session_state.page == "Recommendation":
+
+    st.subheader("Recommendation")
+
+    if best_area is None:
+        st.warning("No recommendation available.")
+    else:
+        st.success(f"Recommended Area: {best_area['lad_name']}")
+
+        st.markdown(
+            f"""
+            <div class="card">
+            <h3>Why {best_area['lad_name']}?</h3>
+            <p>
+            Based on your search for <b>{city}</b> with a budget of <b>£{budget:,}</b>,
+            this area has the highest investment score.
+            </p>
+            <p>
+            It performs well because it balances revenue potential, rental yield,
+            demand and market saturation.
+            </p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        
+# -----------------------------
+# RISKS
+# -----------------------------
+elif st.session_state.page == "Risks":
+
+    st.subheader("Risk Assessment")
+
+    if best_area is None:
+        st.warning("No risk data available.")
+    else:
+        st.markdown(
+            f"""
+            <div class="card">
+            <h3>Risk overview for {best_area['lad_name']}</h3>
+            <p>
+            This section highlights key investment risks that could affect
+            short-term rental performance.
+            </p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        
