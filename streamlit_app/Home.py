@@ -10,6 +10,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
+
 # ── Theme toggle ───────────────────────────────────────────────────────────────
 dark_mode = st.toggle("🌙 Dark mode", key="dark_mode", label_visibility="visible")
 
@@ -173,7 +174,7 @@ TEAM = [
     ("Adam Choy",           "https://www.linkedin.com/in/adam-choy-b95715190/"),
     ("Roisin Houchen",      "https://www.linkedin.com/in/roisin-houchen/"),
     ("Tariq Ali",           "https://www.linkedin.com/in/tariq-ali/"),
-    ("Thadsha Sivashanker", "https://www.linkedin.com/in/thadsha-sivashanker/"),
+    ("Thadsha Sivashanker", "https://www.linkedin.com/in/thadsha-sivashanker-877946243/"),
 ]
 
 team_links = " &middot; ".join([
@@ -624,9 +625,9 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
             <li><a href="/Data_Dictionary" target="_self">Data</a></li>
         </ul>
     </div>
-    <a href="#" style="background:var(--text);color:var(--bg);padding:10px 24px;
+    <a href="/1_Dashboard" target="_self" style="background:var(--text);color:var(--bg);padding:10px 24px;
         border-radius:8px;font-size:0.875rem;font-weight:500;text-decoration:none;
-        font-family:'Inter',sans-serif;">Get Started</a>
+        font-family:'Inter',sans-serif;">Analyse Investment</a>
 </div>
 
 <!-- ═══ HERO CARD ═══ -->
@@ -694,7 +695,15 @@ with st.container(key="investor_setup"):
         investor_bedrooms = st.selectbox(
             "Bedrooms", [1, 2, 3, 4, 5], key="investor_bedrooms",
         )
+st.markdown("<br>", unsafe_allow_html=True)
 
+if st.button("Analyse Investment", key="analyse_investment_btn"):
+    st.session_state["city"] = investor_city
+    st.session_state["budget"] = investor_budget
+    st.session_state["profile"] = investor_profile
+    st.session_state["bedrooms"] = investor_bedrooms
+
+    st.switch_page("./pages/1_Dashboard.py")
 st.markdown(f"""
 <!-- ═══ CITY CARDS ═══ -->
 <div class="cities-section" id="section-cities">
@@ -715,6 +724,7 @@ st.markdown(f"""
     {city_summary_table_html}
 </div>
 """, unsafe_allow_html=True)
+
 
 # ── Combined footer ───────────────────────────────────────────────────────────
 st.markdown(f"""
