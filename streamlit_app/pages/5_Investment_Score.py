@@ -1,8 +1,13 @@
 import os
+import sys
 import pandas as pd
 import streamlit as st
 
-st.set_page_config(page_title="Investment Score · InvestStay", layout="wide")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from theme import TEAL, inject_css, _get_logo_b64, render_navbar, render_stripes
+from ai_insight import generate_insight
+
+st.set_page_config(page_title="Investment Score · InvestStay", layout="wide", initial_sidebar_state="collapsed")
 
 # -----------------------------
 # LOAD DATA
@@ -16,59 +21,17 @@ msoa_df = pd.read_csv(os.path.join(DATA_DIR, "msoa_investment_summary.csv"))
 # -----------------------------
 # STYLE
 # -----------------------------
-st.markdown("""
-<style>
-[data-testid="stSidebar"] {
-    background-color: #F3FBFA;
-}
-
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3,
-[data-testid="stSidebar"] label,
-[data-testid="stSidebar"] p {
-    color: #0D223F;
-}
-
-.main-title {
-    font-size: 42px;
-    font-weight: 800;
-    color: #0D223F;
-}
-
-.teal {
-    color: #00A99D;
-}
-
-.card {
-    background-color: white;
-    padding: 24px;
-    border-radius: 18px;
-    border: 1px solid #D9F3F0;
-    box-shadow: 0px 4px 12px rgba(0,0,0,0.05);
-}
-
-.score {
-    font-size: 54px;
-    font-weight: 800;
-    color: #00A99D;
-}
-
-.stButton > button {
-    background-color: #00A99D;
-    color: white;
-    border: none;
-    border-radius: 12px;
-    padding: 0.7rem 1.2rem;
-    font-weight: 600;
-}
-
-.stButton > button:hover {
-    background-color: #008C84;
-    color: white;
-}
-</style>
-""", unsafe_allow_html=True)
+t = inject_css(extra_css=f"""
+.main-title {{ font-size: 42px; font-weight: 800; }}
+.teal {{ color: {TEAL}; }}
+.score {{ font-size: 54px; font-weight: 800; color: {TEAL}; }}
+.stButton > button {{
+    background-color: {TEAL}; color: white; border: none;
+    border-radius: 12px; padding: 0.7rem 1.2rem; font-weight: 600;
+}}
+.stButton > button:hover {{ background-color: #0b7d73; color: white; }}
+""")
+render_navbar(active="Score")
 
 # -----------------------------
 # SCORING
@@ -105,39 +68,53 @@ msoa_df = add_investment_score(msoa_df)
 # SESSION STATE
 # -----------------------------
 if "score_page" not in st.session_state:
-    st.session_state.score_page = "Home"
+    # Jump straight to the Dashboard tab if we arrived via Home's "Analyse
+    # Investment" flow (city is set in session_state); otherwise land on Home.
+    st.session_state.score_page = "Dashboard" if "city" in st.session_state else "Home"
 
 # -----------------------------
 # LEFT SIDEBAR = INPUTS ONLY
 # -----------------------------
 with st.sidebar:
-    logo_path = os.path.join(ASSETS_DIR, "logo investstay.png")
-    if os.path.exists(logo_path):
-        st.image(logo_path, use_container_width=True)
+    st.markdown(
+        '<a href="/" target="_self" style="display:block;"><img src="data:image/png;base64,'
+        + _get_logo_b64() + '" style="width:100%;height:auto;"/></a>'
+        if _get_logo_b64() else '',
+        unsafe_allow_html=True,
+    )
 
     st.header("Search Inputs")
 
+    city_options = sorted(lad_df["city"].dropna().str.title().unique())
+    default_city = st.session_state.get("city")
     city = st.selectbox(
         "Select City",
-        sorted(lad_df["city"].dropna().unique())
+        city_options,
+        index=city_options.index(default_city) if default_city in city_options else 0,
     )
 
     budget = st.slider(
         "Investment Budget (£)",
         50000,
         1000000,
-        250000,
+        st.session_state.get("budget", 250000),
         step=10000
     )
 
+    profile_options = ["First-time investor", "Multi-property host"]
+    default_profile = st.session_state.get("profile")
     profile = st.selectbox(
         "Investor Profile",
-        ["First-time investor", "Multi-property host"]
+        profile_options,
+        index=profile_options.index(default_profile) if default_profile in profile_options else 0,
     )
 
+    room_options = [1, 2, 3, 4, 5]
+    default_rooms = st.session_state.get("bedrooms")
     rooms = st.selectbox(
         "Bedrooms",
-        [1, 2, 3, 4, 5]
+        room_options,
+        index=room_options.index(default_rooms) if default_rooms in room_options else 0,
     )
 
     analyse = st.button("Analyse Investment")
@@ -148,7 +125,7 @@ with st.sidebar:
 # -----------------------------
 # FILTER DATA
 # -----------------------------
-city_df = lad_df[lad_df["city"] == city].copy()
+city_df = lad_df[lad_df["city"].str.title() == city].copy()
 
 if "median_house_price_2025_lad" in city_df.columns:
     city_df = city_df[city_df["median_house_price_2025_lad"] <= budget]
@@ -168,6 +145,7 @@ st.markdown(
 )
 
 st.write("Smart Data. Smart Investments.")
+render_stripes()
 
 # -----------------------------
 # MAIN PAGE NAVIGATION BUTTONS
@@ -369,18 +347,24 @@ elif st.session_state.score_page == "Recommendation":
     else:
         st.success(f"Recommended Area: {best_area['lad_name']}")
 
+        insight = generate_insight(
+            area_name=best_area["lad_name"],
+            city=city,
+            budget=budget,
+            stats={
+                "str_yield": best_area["str_gross_yield"],
+                "ltr_yield": best_area["ltr_gross_yield"],
+                "str_revenue": best_area["str_annual_revenue_est"],
+                "saturation_score": best_area["saturation_score"],
+                "investment_score": best_area["investment_score"],
+            },
+        )
+
         st.markdown(
             f"""
             <div class="card">
             <h3>Why {best_area['lad_name']}?</h3>
-            <p>
-            Based on your search for <b>{city}</b> with a budget of <b>£{budget:,}</b>,
-            this area has the highest investment score.
-            </p>
-            <p>
-            It performs well because it balances revenue potential, rental yield,
-            demand and market saturation.
-            </p>
+            <p>{insight}</p>
             </div>
             """,
             unsafe_allow_html=True

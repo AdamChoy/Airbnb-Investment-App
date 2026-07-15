@@ -3,34 +3,16 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import os
+import sys
 
-st.set_page_config(page_title="Yield Analysis · InvestStay", page_icon="📈", layout="wide")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from theme import TEAL, inject_css, render_navbar, render_stripes
 
-NAVY = "#1B2A4A"; TEAL = "#0D9488"; LIGHT = "#F0F4F8"; WHITE = "#FFFFFF"; MID = "#64748B"
+st.set_page_config(page_title="Yield Analysis · InvestStay", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
 
-st.markdown(f"""
-<style>
-    html, body, [data-testid="stAppViewContainer"] {{ background-color:{LIGHT}; font-family:'Inter','Segoe UI',sans-serif; }}
-    [data-testid="stSidebar"] {{ background-color:{NAVY} !important; }}
-    [data-testid="stSidebar"] * {{ color:{WHITE} !important; }}
-    [data-testid="stSidebar"] hr {{ border-color:#2d4a6e; }}
-    #MainMenu, footer, header {{ visibility:hidden; }}
-    .section-header {{
-        font-size:1.1rem;font-weight:700;color:{NAVY};text-transform:uppercase;
-        letter-spacing:0.08em;border-bottom:2px solid {TEAL};padding-bottom:6px;margin:24px 0 16px 0;
-    }}
-</style>
-""", unsafe_allow_html=True)
-
-with st.sidebar:
-    st.markdown(f"""
-    <div style='padding:16px 0 8px 0;'>
-        <div style='font-size:1.6rem;font-weight:800;color:white;letter-spacing:-0.02em;'>
-            Invest<span style='color:{TEAL};'>Stay</span>
-        </div>
-        <div style='font-size:0.75rem;color:#7fb3d3;margin-top:2px;letter-spacing:0.1em;'>ANALYSE · INVEST · GROW</div>
-    </div><hr/>
-    """, unsafe_allow_html=True)
+t = inject_css()
+NAVY = t["text"]; LIGHT = t["bg"]; WHITE = t["card_bg"]; MID = t["text_muted"]
+render_navbar(active="Yields")
 
 @st.cache_data
 def load_data():
@@ -43,9 +25,10 @@ msoa_df, lad_df = load_data()
 
 st.markdown(f"<h2 style='color:{NAVY};font-weight:800;margin-bottom:4px;'>Yield Analysis</h2>", unsafe_allow_html=True)
 st.markdown(f"<p style='color:{MID};margin-bottom:24px;'>Compare STR and LTR gross yields across cities and neighbourhoods.</p>", unsafe_allow_html=True)
+render_stripes()
 
-city_filter = st.selectbox("Filter by city", ["All"] + sorted(msoa_df["city"].dropna().unique().tolist()))
-plot_df = msoa_df if city_filter == "All" else msoa_df[msoa_df["city"] == city_filter]
+city_filter = st.selectbox("Filter by city", ["All"] + sorted(msoa_df["city"].dropna().str.title().unique().tolist()))
+plot_df = msoa_df if city_filter == "All" else msoa_df[msoa_df["city"].str.title() == city_filter]
 plot_df = plot_df.dropna(subset=["str_gross_yield", "ltr_gross_yield"])
 
 # ── STR vs LTR scatter ────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import os
 import base64
@@ -11,8 +12,23 @@ st.set_page_config(
 )
 
 
-# ── Theme toggle ───────────────────────────────────────────────────────────────
-dark_mode = st.toggle("🌙 Dark mode", key="dark_mode", label_visibility="visible")
+# ── Settings menu (dark mode + currency) ────────────────────────────────────────
+with st.container(key="settings_menu"):
+    dark_mode = st.toggle("🌙 Dark mode", key="dark_mode", label_visibility="visible")
+    st.markdown('<div class="settings-divider"></div>', unsafe_allow_html=True)
+    currency = st.radio(
+        "Currency", ["£ GBP", "$ USD"], key="currency",
+        horizontal=True, label_visibility="collapsed",
+    )
+
+GBP_TO_USD = 1.27  # static conversion rate, not live-fetched
+CURRENCY_SYMBOL = "£" if currency == "£ GBP" else "$"
+
+def fmt_money(gbp_amount):
+    if pd.isna(gbp_amount):
+        return "N/A"
+    amount = gbp_amount if currency == "£ GBP" else gbp_amount * GBP_TO_USD
+    return f"{CURRENCY_SYMBOL}{amount:,.0f}"
 
 if dark_mode:
     THEME = dict(
@@ -22,9 +38,9 @@ if dark_mode:
     )
 else:
     THEME = dict(
-        bg="#f5f0e8", text="#1a1a1a", text_muted="#888", border="#d4cfc5",
-        card_bg="#ffffff", card_alt_bg="#eee8d8", card_alt_hover="#e3ddc9",
-        table_row_alt="#f9f6ef",
+        bg="#F1F6F5", text="#1a1a1a", text_muted="#888", border="#D7E5E2",
+        card_bg="#ffffff", card_alt_bg="#E3EEEC", card_alt_hover="#D8E8E5",
+        table_row_alt="#EDF5F3",
     )
 
 theme_vars_css = f""":root {{
@@ -40,15 +56,15 @@ theme_vars_css = f""":root {{
 
 # ── Load logo ─────────────────────────────────────────────────────────────────
 def get_logo_b64():
-    logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo investstay.png")
+    logo_path = os.path.join(os.path.dirname(__file__), "assets", "logo_investstay_simple_cropped.png")
     if os.path.exists(logo_path):
         with open(logo_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
     return None
 
 logo_b64 = get_logo_b64()
-logo_img     = f'<img src="data:image/png;base64,{logo_b64}" style="height:110px;width:auto;"/>' if logo_b64 else ""
-navbar_logo_img = f'<img src="data:image/png;base64,{logo_b64}" style="height:96px;width:auto;"/>' if logo_b64 else ""
+logo_img     = f'<img src="data:image/png;base64,{logo_b64}" style="height:220px;width:auto;"/>' if logo_b64 else ""
+navbar_logo_img = f'<img src="data:image/png;base64,{logo_b64}" style="height:82px;width:auto;display:block;transform:translateY(-6px);"/>' if logo_b64 else ""
 
 # ── Load city photos ──────────────────────────────────────────────────────────
 def get_city_img_tag(city_name):
@@ -62,11 +78,11 @@ def get_city_img_tag(city_name):
             return f'<img src="data:image/{mime};base64,{b64}" alt="{city_name}"/>'
     return ""
 
-# ── Load hero background ──────────────────────────────────────────────────────
-def get_hero_bg_b64():
+# ── Load hero carousel images ───────────────────────────────────────────────────
+def get_asset_uri(stem):
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
     for ext in (".jpg", ".jpeg", ".png", ".webp"):
-        path = os.path.join(assets_dir, f"hero-bg{ext}")
+        path = os.path.join(assets_dir, f"{stem}{ext}")
         if os.path.exists(path):
             mime = "jpeg" if ext in (".jpg", ".jpeg") else ext.lstrip(".")
             with open(path, "rb") as f:
@@ -74,12 +90,21 @@ def get_hero_bg_b64():
             return f"data:image/{mime};base64,{b64}"
     return None
 
-hero_bg_uri = get_hero_bg_b64()
-hero_bg_css = (
-    f"background-image: linear-gradient(180deg, rgba(15,20,25,0.35) 0%, rgba(10,14,18,0.75) 100%), url('{hero_bg_uri}');"
-    "background-size: cover; background-position: center;"
-    if hero_bg_uri else "background: var(--bg);"
+hero_slide_uris = [uri for uri in (get_asset_uri(f"hero_{i}") for i in (1, 2, 3)) if uri]
+if not hero_slide_uris:
+    fallback = get_asset_uri("hero-bg")
+    if fallback:
+        hero_slide_uris = [fallback]
+
+HERO_SLIDE_SECONDS = 12  # seconds each image is fully visible before crossfading
+hero_cycle_seconds = max(len(hero_slide_uris), 1) * HERO_SLIDE_SECONDS
+
+hero_slides_html = "".join(
+    f'''<div class="hero-slide" style="background-image:linear-gradient(180deg, rgba(15,20,25,0.35) 0%, rgba(10,14,18,0.75) 100%), url('{uri}');
+        animation-duration:{hero_cycle_seconds}s; animation-delay:{i * HERO_SLIDE_SECONDS}s;"></div>'''
+    for i, uri in enumerate(hero_slide_uris)
 )
+hero_bg_css = "background: var(--bg);" if not hero_slide_uris else ""
 
 CITIES = ["London", "Manchester", "Bristol"]
 city_cards = "".join([
@@ -112,6 +137,8 @@ total_listings = int(msoa_df["total_listings"].sum())
 total_msoas    = len(msoa_df)
 avg_str_yield  = msoa_df["str_gross_yield"].mean()
 top_delta      = msoa_df["str_vs_ltr_yield_delta"].max()
+avg_ltr_yield  = msoa_df["ltr_gross_yield"].mean()
+cities_covered = msoa_df["city"].nunique()
 
 top10 = (
     msoa_df[msoa_df["str_vs_ltr_yield_delta"].notna()]
@@ -124,9 +151,9 @@ top10 = (
 top10["str_gross_yield"]         = (top10["str_gross_yield"]*100).round(2).astype(str)+"%"
 top10["ltr_gross_yield"]         = (top10["ltr_gross_yield"]*100).round(2).astype(str)+"%"
 top10["str_vs_ltr_yield_delta"]  = (top10["str_vs_ltr_yield_delta"]*100).round(2).astype(str)+"%"
-top10["median_house_price_2025"] = top10["median_house_price_2025"].apply(lambda x: f"£{x:,.0f}" if pd.notna(x) else "N/A")
-top10["median_nightly_price"]    = top10["median_nightly_price"].apply(lambda x: f"£{x:.0f}")
-top10.columns = ["City","MSOA","LAD","Nightly Price","STR Yield","LTR Yield","Delta","House Price","15-min Rail %"]
+top10["median_house_price_2025"] = top10["median_house_price_2025"].apply(fmt_money)
+top10["median_nightly_price"]    = top10["median_nightly_price"].apply(fmt_money)
+top10.columns = ["City","MSOA Name","LAD Name","Nightly Price","STR Yield","LTR Yield","Delta","House Price","15-min Rail %"]
 top10["City"] = top10["City"].str.title()
 
 city_summary = (
@@ -139,7 +166,7 @@ city_summary = (
 city_summary["STR"]      = (city_summary["STR"]*100).round(2).astype(str)+"%"
 city_summary["LTR"]      = (city_summary["LTR"]*100).round(2).astype(str)+"%"
 city_summary["Delta"]    = (city_summary["Delta"]*100).round(2).astype(str)+"%"
-city_summary["HP"]       = city_summary["HP"].apply(lambda x: f"£{x:,.0f}")
+city_summary["HP"]       = city_summary["HP"].apply(fmt_money)
 city_summary["Listings"] = city_summary["Listings"].apply(lambda x: f"{x:,}")
 city_summary.columns     = ["City","MSOAs","Listings","Avg STR Yield","Avg LTR Yield","Avg Delta","Avg House Price"]
 city_summary["City"] = city_summary["City"].str.title()
@@ -167,13 +194,30 @@ def df_to_html_table(df, right_align_from=1, highlight_col=None):
 top10_table_html = df_to_html_table(top10, right_align_from=3, highlight_col="Delta")
 city_summary_table_html = df_to_html_table(city_summary, right_align_from=1, highlight_col="Avg Delta")
 
+# ── Metrics marquee (duplicated once for a seamless scroll loop) ────────────────
+METRICS = [
+    (f"{total_listings:,}", "Total Airbnb Listings"),
+    (f"{total_msoas:,}", "MSOAs Analysed"),
+    (f"{avg_str_yield*100:.1f}%", "Average Short-Term Rental (STR) Gross Yield"),
+    (f"+{top_delta*100:.1f}%", "Best STR vs LTR Delta"),
+    (f"{avg_ltr_yield*100:.1f}%", "Average Long-Term Rental (LTR) Gross Yield"),
+    (f"{cities_covered}", "Cities Covered"),
+]
+metric_items_html = "".join(
+    f'''<div class="metric-item">
+        <div class="metric-num">{num}</div>
+        <div class="metric-lbl">{lbl}</div>
+    </div>'''
+    for num, lbl in METRICS
+)
+
 # ── Footer constants ──────────────────────────────────────────────────────────
 LINKEDIN_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M22.23 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.46c.98 0 1.77-.77 1.77-1.72V1.72C24 .77 23.21 0 22.23 0zM7.06 20.45H3.56V9h3.5v11.45zM5.31 7.43c-1.12 0-2.03-.92-2.03-2.05 0-1.13.91-2.05 2.03-2.05 1.12 0 2.03.92 2.03 2.05 0 1.13-.91 2.05-2.03 2.05zM20.45 20.45h-3.5v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.13 1.44-2.13 2.94v5.67h-3.5V9h3.36v1.56h.05c.47-.89 1.62-1.85 3.34-1.85 3.57 0 4.23 2.35 4.23 5.41v6.33z"/></svg>'
 
 TEAM = [
     ("Adam Choy",           "https://www.linkedin.com/in/adam-choy-b95715190/"),
-    ("Roisin Houchen",      "https://www.linkedin.com/in/roisin-houchen/"),
-    ("Tariq Ali",           "https://www.linkedin.com/in/tariq-ali/"),
+    ("Roisin Houchen",      "https://www.linkedin.com/in/roisin-houchen-aa4175313/"),
+    ("Tariq Ali",           "https://www.linkedin.com/in/tariq-ali-10l/"),
     ("Thadsha Sivashanker", "https://www.linkedin.com/in/thadsha-sivashanker-877946243/"),
 ]
 
@@ -195,36 +239,77 @@ st.markdown(f"""
 
 *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
 
+html, body {{ overflow-x: hidden; max-width: 100vw; }}
+
 html, [data-testid="stMain"], [data-testid="stAppViewContainer"] {{ scroll-behavior: smooth; }}
 
 html, body,
 [data-testid="stAppViewContainer"],
 [data-testid="stMain"],
 [data-testid="stMainBlockContainer"],
+[data-testid="stAppViewBlockContainer"],
 .block-container {{
     font-family: 'Inter', sans-serif !important;
     -webkit-font-smoothing: antialiased;
     background: var(--bg) !important;
     color: var(--text) !important;
     padding: 0 !important;
+    margin-top: 0 !important;
     max-width: 100% !important;
+    overflow-x: hidden !important;
+}}
+[data-testid="stMain"] > div:first-child,
+[data-testid="stElementContainer"]:first-of-type {{
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}}
+[data-testid="stVerticalBlock"] {{
+    gap: 0 !important;
 }}
 
-[data-testid="stElementContainer"]:has([data-testid="stCheckbox"]) {{
+.st-key-settings_menu {{
     position: fixed;
-    top: 14px;
+    top: 46px;
     right: 48px;
     z-index: 1000;
-    background: var(--card-alt-bg);
-    padding: 4px 14px;
-    border-radius: 20px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    background: var(--card-bg);
+    padding: 14px 18px;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.14);
     width: auto !important;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-6px);
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
 }}
-[data-testid="stElementContainer"]:has([data-testid="stCheckbox"]) label p {{
+body:has(.settings-btn:hover) .st-key-settings_menu,
+.st-key-settings_menu:hover {{
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+}}
+.st-key-settings_menu label p {{
     color: var(--text) !important;
     font-family: 'Inter', sans-serif;
     font-size: 0.85rem !important;
+}}
+.st-key-settings_menu [data-testid="stRadio"] > div {{
+    gap: 6px;
+}}
+.settings-divider {{
+    height: 1px;
+    background: var(--border);
+    margin: 2px 0 6px;
+}}
+.st-key-settings_menu [data-testid="stToggle"] [role="switch"][aria-checked="true"],
+.st-key-settings_menu [data-testid="stToggle"] div[data-baseweb="toggle"][aria-checked="true"] {{
+    background-color: #0D9488 !important;
+    border-color: #0D9488 !important;
 }}
 
 #MainMenu, footer, header,
@@ -239,13 +324,22 @@ html, body,
 /* ── Section side rail ── */
 .side-rail {{
     position: fixed;
-    left: 24px;
+    left: 8px;
     top: 50%;
     transform: translateY(-50%);
     display: flex;
     flex-direction: column;
     gap: 12px;
     z-index: 999;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.25s ease, visibility 0.25s ease;
+}}
+.side-rail.is-visible {{
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
 }}
 .side-rail a {{
     width: 44px;
@@ -284,16 +378,31 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 48px;
+    padding: 4px 48px;
     background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}}
+.navbar-divider {{
+    height: 1.5px;
+    margin: 0 32px;
+    background: var(--text-muted);
+    opacity: 0.4;
+    position: sticky;
+    top: 66px;
+    z-index: 99;
 }}
 .navbar-left {{
     display: flex;
     align-items: center;
-    gap: 48px;
+    height: 58px;
+    gap: 28px;
 }}
 .navbar-logo-link {{
     display: inline-flex;
+    margin-top: auto;
+    margin-bottom: auto;
     transition: opacity 0.2s ease, transform 0.2s ease;
 }}
 .navbar-logo-link:hover {{
@@ -302,17 +411,47 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
 }}
 .nav-links {{
     display: flex;
-    gap: 36px;
+    align-items: center;
+    margin-top: auto;
+    margin-bottom: auto;
+    gap: 22px;
     list-style: none;
+    transform: translateX(-10px);
+}}
+.nav-links li {{
+    display: flex;
+    align-items: center;
 }}
 .nav-links a {{
     color: var(--text);
     text-decoration: none;
     font-size: 1.15rem;
     font-weight: 500;
+    line-height: 1;
     transition: opacity 0.2s;
 }}
 .nav-links a:hover {{ opacity: 0.6; }}
+.navbar-right {{
+    display: flex;
+    align-items: center;
+    height: 58px;
+    gap: 14px;
+}}
+.settings-btn {{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    margin-top: auto;
+    margin-bottom: auto;
+    border-radius: 50%;
+    color: var(--text);
+    background: var(--card-alt-bg);
+    transition: transform 0.15s ease, background 0.15s ease;
+}}
+.settings-btn svg {{ width: 18px; height: 18px; }}
+.settings-btn:hover {{ transform: rotate(45deg); background: var(--card-alt-hover); }}
 
 /* ── Investor setup ── */
 .st-key-investor_setup {{
@@ -337,17 +476,38 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
 
 /* ── Hero card ── */
 .hero-card {{
-    margin: 0 32px;
+    margin: 0;
     {hero_bg_css}
-    border-radius: 20px;
+    border-radius: 0;
     overflow: hidden;
     position: relative;
-    min-height: 460px;
+    min-height: 564px;
     display: flex;
     align-items: flex-end;
 }}
+.hero-slide {{
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0;
+    animation-name: heroFade;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    z-index: 0;
+}}
+@keyframes heroFade {{
+    0%      {{ opacity: 0; }}
+    6.2%    {{ opacity: 1; }}
+    26.8%   {{ opacity: 1; }}
+    33%     {{ opacity: 0; }}
+    100%    {{ opacity: 0; }}
+}}
+@media (prefers-reduced-motion: reduce) {{
+    .hero-slide {{ animation: none; opacity: 1; }}
+}}
 .hero-inner {{
-    padding: 40px 48px 32px;
+    padding: 40px 48px 32px 72px;
     position: relative;
     z-index: 2;
 }}
@@ -359,7 +519,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     letter-spacing: -0.05em;
 }}
 .hero-heading {{
-    font-size: clamp(2.8rem, 6vw, 5rem);
+    font-size: clamp(3.8rem, 7.8vw, 6.6rem);
     font-weight: 800;
     line-height: 1.0;
     letter-spacing: -0.04em;
@@ -367,10 +527,10 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     margin-bottom: 0;
 }}
 .hero-subheading {{
-    font-size: 1.05rem;
+    font-size: 1.45rem;
     font-weight: 400;
     color: #ffffff !important;
-    opacity: 0.65;
+    opacity: 0.85;
     margin-top: 16px;
 }}
 
@@ -380,9 +540,10 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     flex-direction: column;
     width: 100%;
     flex-shrink: 0;
-    margin-top: 32px;
+    margin-top: 0;
 }}
 .stripe {{ height: 18px; width: 100%; }}
+.s0 {{ background: #0A2740; }}
 .s1 {{ background: #1B4F72; }}
 .s2 {{ background: #1A6B8A; }}
 .s3 {{ background: #0D9488; }}
@@ -391,7 +552,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
 
 /* ── Metrics ── */
 .metrics-section {{
-    padding: 64px 48px 48px;
+    padding: 24px 48px 48px;
     margin: 0 32px;
 }}
 .metrics-heading {{
@@ -402,18 +563,34 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     color: var(--text-muted);
     margin-bottom: 32px;
 }}
-.metrics-grid {{
-    display: grid;
-    grid-template-columns: repeat(4,1fr);
-    gap: 0;
+.metrics-marquee {{
+    overflow: hidden;
     border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 64px, #000 calc(100% - 64px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 64px, #000 calc(100% - 64px), transparent 100%);
+}}
+.metrics-track {{
+    display: flex;
+    width: max-content;
+    animation: metricsScroll 55s linear infinite;
+}}
+.metrics-marquee:hover .metrics-track {{
+    animation-play-state: paused;
+}}
+@keyframes metricsScroll {{
+    from {{ transform: translateX(0); }}
+    to   {{ transform: translateX(-50%); }}
+}}
+@media (prefers-reduced-motion: reduce) {{
+    .metrics-track {{ animation: none; }}
 }}
 .metric-item {{
-    padding: 28px 0;
+    flex: 0 0 auto;
+    width: 280px;
+    padding: 28px 32px;
     border-right: 1px solid var(--border);
 }}
-.metric-item:last-child {{ border-right: none; }}
-.metric-item:not(:first-child) {{ padding-left: 28px; }}
 .metric-num {{
     font-size: 2.6rem;
     font-weight: 800;
@@ -574,6 +751,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     width: 100%;
 }}
 .fs {{ height: 18px; width: 100%; }}
+.fs0 {{ background: #0A2740; }}
 .fs1 {{ background: #1B4F72; }}
 .fs2 {{ background: #1A6B8A; }}
 .fs3 {{ background: #0D9488; }}
@@ -593,6 +771,8 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
 }}
 
 </style>
+
+<div id="section-home"></div>
 
 <!-- ═══ SECTION SIDE RAIL ═══ -->
 <div class="side-rail">
@@ -623,23 +803,36 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
             <li><a href="/Sentiment" target="_self">Sentiment</a></li>
             <li><a href="/Investment_Score" target="_self">Score</a></li>
             <li><a href="/Data_Dictionary" target="_self">Data</a></li>
+            <li><a href="/How_It_Works" target="_self">How It Works</a></li>
+            <li><a href="#section-footer" target="_self">About Us</a></li>
         </ul>
     </div>
-    <a href="/1_Dashboard" target="_self" style="background:var(--text);color:var(--bg);padding:10px 24px;
-        border-radius:8px;font-size:0.875rem;font-weight:500;text-decoration:none;
-        font-family:'Inter',sans-serif;">Analyse Investment</a>
+    <div class="navbar-right">
+        <a href="/Investment_Score" target="_self" style="background:var(--text);color:var(--bg);padding:10px 24px;
+            border-radius:8px;font-size:0.875rem;font-weight:500;text-decoration:none;line-height:1.2;
+            display:inline-flex;align-items:center;margin-top:auto;margin-bottom:auto;font-family:'Inter',sans-serif;">Analyse Investment</a>
+        <a href="#" onclick="return false;" class="settings-btn" title="Settings" aria-label="Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+        </a>
+    </div>
 </div>
+<div class="navbar-divider"></div>
 
 <!-- ═══ HERO CARD ═══ -->
-<div class="hero-card" id="section-home">
+<div class="hero-card" id="hero-visual">
+    {hero_slides_html}
     <div class="hero-inner">
         <h1 class="hero-heading">
-            From raw data to real returns.
+            Find your perfect property to invest in.
         </h1>
-        <p class="hero-subheading">Built on open data. Designed for smarter property investment.</p>
+        <p class="hero-subheading">From raw data to real returns. Built on open data. Designed for smarter property investment.</p>
     </div>
 </div>
 <div class="stripes">
+    <div class="stripe s0"></div>
     <div class="stripe s1"></div>
     <div class="stripe s2"></div>
     <div class="stripe s3"></div>
@@ -649,26 +842,41 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
 
 <!-- ═══ METRICS ═══ -->
 <div class="metrics-section" id="section-metrics">
-    <div class="metrics-grid">
-        <div class="metric-item">
-            <div class="metric-num">{total_listings:,}</div>
-            <div class="metric-lbl">Total Listings</div>
-        </div>
-        <div class="metric-item">
-            <div class="metric-num">{total_msoas:,}</div>
-            <div class="metric-lbl">MSOAs Analysed</div>
-        </div>
-        <div class="metric-item">
-            <div class="metric-num">{avg_str_yield*100:.1f}%</div>
-            <div class="metric-lbl">Average Short-Term Rental (STR) Gross Yield</div>
-        </div>
-        <div class="metric-item">
-            <div class="metric-num">+{top_delta*100:.1f}%</div>
-            <div class="metric-lbl">Best STR vs LTR Delta</div>
+    <div class="metrics-marquee">
+        <div class="metrics-track">
+            {metric_items_html}
+            {metric_items_html}
         </div>
     </div>
 </div>
 """, unsafe_allow_html=True)
+
+components.html("""
+<script>
+(function() {
+    var doc = window.parent.document;
+    function tryBind(attemptsLeft) {
+        var footer = doc.getElementById('section-footer');
+        var rail = doc.querySelector('.side-rail');
+        if (!footer || !rail) {
+            if (attemptsLeft > 0) setTimeout(function(){ tryBind(attemptsLeft - 1); }, 300);
+            return;
+        }
+        function update() {
+            var top = footer.getBoundingClientRect().top;
+            var winHeight = doc.defaultView.innerHeight;
+            rail.classList.toggle('is-visible', top <= winHeight);
+        }
+        var scrollHost = doc.querySelector('[data-testid="stMain"]') || doc.querySelector('[data-testid="stAppViewContainer"]') || doc;
+        scrollHost.addEventListener('scroll', update, { passive: true });
+        doc.defaultView.addEventListener('scroll', update, { passive: true });
+        setInterval(update, 200);
+        update();
+    }
+    tryBind(20);
+})();
+</script>
+""", height=0)
 
 # ── Investor Setup ──────────────────────────────────────────────────────────────
 with st.container(key="investor_setup"):
@@ -682,8 +890,8 @@ with st.container(key="investor_setup"):
         )
     with c2:
         investor_budget = st.slider(
-            "Investment Budget (£)", 50000, 1000000, 250000, step=10000,
-            format="£%d", key="investor_budget",
+            f"Investment Budget ({CURRENCY_SYMBOL})", 50000, 1000000, 250000, step=10000,
+            format=f"{CURRENCY_SYMBOL}%d", key="investor_budget",
         )
     with c3:
         investor_profile = st.selectbox(
@@ -703,7 +911,7 @@ if st.button("Analyse Investment", key="analyse_investment_btn"):
     st.session_state["profile"] = investor_profile
     st.session_state["bedrooms"] = investor_bedrooms
 
-    st.switch_page("./pages/1_Dashboard.py")
+    st.switch_page("./pages/5_Investment_Score.py")
 st.markdown(f"""
 <!-- ═══ CITY CARDS ═══ -->
 <div class="cities-section" id="section-cities">
@@ -731,6 +939,7 @@ st.markdown(f"""
 
 <!-- Stripe band -->
 <div class="footer-stripes" id="section-footer">
+    <div class="fs fs0"></div>
     <div class="fs fs1"></div>
     <div class="fs fs2"></div>
     <div class="fs fs3"></div>
@@ -743,40 +952,40 @@ st.markdown(f"""
     <div>
         <div class="footer-col-title">Explore</div>
         <ul class="footer-links">
-            <li><a href="#">Top Opportunities</a></li>
-            <li><a href="#">City Explorer</a></li>
-            <li><a href="#">MSOA Search</a></li>
+            <li><a href="#section-tables" target="_self">Top Opportunities</a></li>
+            <li><a href="/Explore_Areas" target="_self">City Explorer</a></li>
+            <li><a href="/Explore_Areas" target="_self">MSOA Search</a></li>
         </ul>
     </div>
     <div>
         <div class="footer-col-title">Analysis</div>
         <ul class="footer-links">
-            <li><a href="#">STR Yields</a></li>
-            <li><a href="#">LTR Yields</a></li>
-            <li><a href="#">Yield Delta</a></li>
+            <li><a href="/Yield_Analysis" target="_self">STR Yields</a></li>
+            <li><a href="/Yield_Analysis" target="_self">LTR Yields</a></li>
+            <li><a href="/Yield_Analysis" target="_self">Yield Delta</a></li>
         </ul>
     </div>
     <div>
         <div class="footer-col-title">Insights</div>
         <ul class="footer-links">
-            <li><a href="#">Sentiment</a></li>
-            <li><a href="#">House Prices</a></li>
-            <li><a href="#">Rail Access</a></li>
+            <li><a href="/Sentiment" target="_self">Sentiment</a></li>
+            <li><a href="/Yield_Analysis" target="_self">House Prices</a></li>
+            <li><a href="/Explore_Areas" target="_self">Rail Access</a></li>
         </ul>
     </div>
     <div>
         <div class="footer-col-title">Data</div>
         <ul class="footer-links">
-            <li><a href="#">Data Dictionary</a></li>
-            <li><a href="#">Pipeline Docs</a></li>
-            <li><a href="#">Assumptions</a></li>
+            <li><a href="/Data_Dictionary" target="_self">Data Dictionary</a></li>
+            <li><a href="/Data_Dictionary" target="_self">Pipeline Docs</a></li>
+            <li><a href="/Data_Dictionary" target="_self">Assumptions</a></li>
         </ul>
     </div>
     <div>
         <div class="footer-col-title">About</div>
         <ul class="footer-links">
-            <li><a href="#">Methodology</a></li>
-            <li><a href="https://github.com/" target="_blank">GitHub</a></li>
+            <li><a href="/Data_Dictionary" target="_self">Methodology</a></li>
+            <li><a href="https://github.com/AdamChoy/Airbnb-Investment-App" target="_blank">GitHub</a></li>
         </ul>
     </div>
 </div>

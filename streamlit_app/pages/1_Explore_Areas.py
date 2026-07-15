@@ -1,35 +1,16 @@
 import streamlit as st
 import pandas as pd
 import os
+import sys
 
-st.set_page_config(page_title="Explore Areas · InvestStay", page_icon="🔍", layout="wide")
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from theme import TEAL, inject_css, render_navbar, render_stripes
 
-NAVY = "#1B2A4A"; TEAL = "#0D9488"; LIGHT = "#F0F4F8"; WHITE = "#FFFFFF"; MID = "#64748B"
+st.set_page_config(page_title="Explore Areas · InvestStay", page_icon="🔍", layout="wide", initial_sidebar_state="collapsed")
 
-st.markdown(f"""
-<style>
-    html, body, [data-testid="stAppViewContainer"] {{ background-color: {LIGHT}; font-family:'Inter','Segoe UI',sans-serif; }}
-    [data-testid="stSidebar"] {{ background-color: {NAVY} !important; }}
-    [data-testid="stSidebar"] * {{ color: {WHITE} !important; }}
-    [data-testid="stSidebar"] hr {{ border-color: #2d4a6e; }}
-    #MainMenu, footer, header {{ visibility: hidden; }}
-    .section-header {{
-        font-size:1.1rem; font-weight:700; color:{NAVY}; text-transform:uppercase;
-        letter-spacing:0.08em; border-bottom:2px solid {TEAL}; padding-bottom:6px; margin:24px 0 16px 0;
-    }}
-    .filter-card {{ background:{WHITE}; border-radius:12px; padding:20px; box-shadow:0 2px 8px rgba(0,0,0,0.07); }}
-</style>
-""", unsafe_allow_html=True)
-
-with st.sidebar:
-    st.markdown(f"""
-    <div style='padding:16px 0 8px 0;'>
-        <div style='font-size:1.6rem;font-weight:800;color:white;letter-spacing:-0.02em;'>
-            Invest<span style='color:{TEAL};'>Stay</span>
-        </div>
-        <div style='font-size:0.75rem;color:#7fb3d3;margin-top:2px;letter-spacing:0.1em;'>ANALYSE · INVEST · GROW</div>
-    </div><hr/>
-    """, unsafe_allow_html=True)
+t = inject_css()
+NAVY = t["text"]; LIGHT = t["bg"]; WHITE = t["card_bg"]; MID = t["text_muted"]
+render_navbar(active="Explore")
 
 @st.cache_data
 def load_data():
@@ -49,6 +30,7 @@ msoa_df = load_data()
 
 st.markdown(f"<h2 style='color:{NAVY};font-weight:800;margin-bottom:4px;'>Explore Areas</h2>", unsafe_allow_html=True)
 st.markdown(f"<p style='color:{MID};margin-bottom:24px;'>Filter and rank MSOAs by yield, price, transport, and sentiment.</p>", unsafe_allow_html=True)
+render_stripes()
 
 # ── Filters ───────────────────────────────────────────────────────────────────
 with st.container():
@@ -56,7 +38,7 @@ with st.container():
     f1, f2, f3, f4, f5 = st.columns(5)
 
     with f1:
-        cities = ["All"] + sorted(msoa_df["city"].dropna().unique().tolist())
+        cities = ["All"] + sorted(msoa_df["city"].dropna().str.title().unique().tolist())
         query_city = st.query_params.get("city")
         if query_city and "city_filter" not in st.session_state:
             match = next((c for c in cities if c.lower() == query_city.lower()), None)
@@ -89,7 +71,7 @@ with st.container():
 filtered = msoa_df.copy()
 
 if city != "All":
-    filtered = filtered[filtered["city"] == city]
+    filtered = filtered[filtered["city"].str.title() == city]
 
 filtered = filtered[filtered["median_house_price_2025"].fillna(999999999) <= price_range]
 filtered = filtered[filtered["str_gross_yield"].fillna(0) * 100 >= min_yield]
@@ -141,7 +123,10 @@ if "median_nightly_price" in display.columns:
         lambda x: f"£{x:.0f}" if pd.notna(x) else "N/A"
     )
 
-display.columns = [c.replace("_", " ").title() for c in display.columns]
+display.columns = [
+    c.replace("_", " ").title().replace("Msoa", "MSOA").replace("Lad", "LAD")
+    for c in display.columns
+]
 st.dataframe(display.reset_index(drop=True), use_container_width=True, hide_index=True, height=500)
 
 # ── CSV download ──────────────────────────────────────────────────────────────
