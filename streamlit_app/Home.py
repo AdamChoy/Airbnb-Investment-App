@@ -1,8 +1,10 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
+import json
 import os
 import base64
+import plotly.express as px
 
 st.set_page_config(
     page_title="InvestStay",
@@ -132,6 +134,17 @@ def load_data():
     return msoa, lad
 
 msoa_df, lad_df = load_data()
+
+# ── Load LAD boundary map ────────────────────────────────────────────────────
+@st.cache_data
+def load_lad_geojson():
+    path = os.path.join(os.path.dirname(__file__), "data", "lad_boundaries_filtered.geojson")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+lad_geojson = load_lad_geojson()
 
 total_listings = int(msoa_df["total_listings"].sum())
 total_msoas    = len(msoa_df)
@@ -382,7 +395,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     background: var(--bg);
     position: sticky;
     top: 0;
-    z-index: 100;
+    z-index: 1101;
 }}
 .navbar-divider {{
     height: 1.5px;
@@ -391,7 +404,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     opacity: 0.4;
     position: sticky;
     top: 66px;
-    z-index: 99;
+    z-index: 1100;
 }}
 .navbar-left {{
     display: flex;
@@ -684,6 +697,11 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     box-shadow: 0 2px 12px rgba(0,0,0,0.06);
     margin-bottom: 8px;
 }}
+[data-testid="stPlotlyChart"] {{
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+}}
 .styled-table {{
     width: 100%;
     border-collapse: collapse;
@@ -881,37 +899,24 @@ components.html("""
 # ── Investor Setup ──────────────────────────────────────────────────────────────
 with st.container(key="investor_setup"):
     st.markdown('<div class="investor-setup-title">Investor Setup</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3 = st.columns(3)
     with c1:
-        investor_city = st.selectbox(
-            "City",
-            sorted(msoa_df["city"].dropna().str.title().unique()),
-            key="investor_city",
-        )
+        city_options = sorted(msoa_df["city"].dropna().str.title().unique())
+        if st.session_state.get("global_city") not in city_options:
+            st.session_state["global_city"] = city_options[0]
+        investor_city = st.selectbox("City", city_options, key="global_city")
     with c2:
         investor_budget = st.slider(
             f"Investment Budget ({CURRENCY_SYMBOL})", 50000, 1000000, 250000, step=10000,
-            format=f"{CURRENCY_SYMBOL}%d", key="investor_budget",
+            format=f"{CURRENCY_SYMBOL}%d", key="global_budget",
         )
     with c3:
         investor_profile = st.selectbox(
             "Investor Profile",
             ["First-time investor", "Multi-property host"],
-            key="investor_profile",
+            key="global_profile",
         )
-    with c4:
-        investor_bedrooms = st.selectbox(
-            "Bedrooms", [1, 2, 3, 4, 5], key="investor_bedrooms",
-        )
-st.markdown("<br>", unsafe_allow_html=True)
-
-if st.button("Analyse Investment", key="analyse_investment_btn"):
-    st.session_state["city"] = investor_city
-    st.session_state["budget"] = investor_budget
-    st.session_state["profile"] = investor_profile
-    st.session_state["bedrooms"] = investor_bedrooms
-
-    st.switch_page("./pages/5_Investment_Score.py")
+st.session_state["global_city_filter"] = investor_city
 st.markdown(f"""
 <!-- ═══ CITY CARDS ═══ -->
 <div class="cities-section" id="section-cities">
@@ -920,7 +925,48 @@ st.markdown(f"""
         {city_cards}
     </div>
 </div>
+""", unsafe_allow_html=True)
 
+# ── Coverage map ─────────────────────────────────────────────────────────────
+if lad_geojson:
+    map_df = lad_df[lad_df["city"].isin(["london", "bristol", "manchester"])].copy()
+    map_df["City"] = map_df["city"].str.title()
+    map_df["STR Gross Yield (%)"] = (map_df["str_gross_yield"] * 100).round(2)
+
+    st.markdown("""
+    <div class="content-section" style="padding-bottom:0;">
+        <div class="section-title" style="border-top:none;padding-top:0;">Three Cities — London, Manchester and Bristol</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    map_fig = px.choropleth_map(
+        map_df,
+        geojson=lad_geojson,
+        locations="lad_code",
+        featureidkey="properties.lad_code",
+        color="STR Gross Yield (%)",
+        color_continuous_scale=[[0, "#E3EEEC"], [1, "#0D9488"]],
+        hover_name="lad_name",
+        hover_data={"City": True, "lad_code": False, "STR Gross Yield (%)": True},
+        map_style="carto-positron",
+        zoom=5.4,
+        center={"lat": 53.4, "lon": -1.9},
+        opacity=0.85,
+        height=520,
+    )
+    map_fig.update_traces(marker_line_width=1, marker_line_color="#ffffff")
+    map_fig.update_layout(
+        margin=dict(l=0, r=0, t=0, b=0),
+        paper_bgcolor="rgba(0,0,0,0)",
+        font_family="Inter",
+    )
+    st.markdown('<div class="content-section" style="padding-top:0;">', unsafe_allow_html=True)
+    map_col_l, map_col_mid, map_col_r = st.columns([1, 3, 1])
+    with map_col_mid:
+        st.plotly_chart(map_fig, use_container_width=True, config={"scrollZoom": False})
+    st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown(f"""
 <!-- ═══ TABLES ═══ -->
 <div class="content-section" id="section-tables">
     <div class="section-title">Top Investment Opportunities — STR vs LTR Yield Delta</div>

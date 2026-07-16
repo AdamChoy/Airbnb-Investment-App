@@ -73,51 +73,36 @@ if "score_page" not in st.session_state:
     st.session_state.score_page = "Dashboard" if "city" in st.session_state else "Home"
 
 # -----------------------------
-# LEFT SIDEBAR = INPUTS ONLY
+# SEARCH INPUTS (persist across pages via shared session_state keys)
 # -----------------------------
-with st.sidebar:
-    st.markdown(
-        '<a href="/" target="_self" style="display:block;"><img src="data:image/png;base64,'
-        + _get_logo_b64() + '" style="width:100%;height:auto;"/></a>'
-        if _get_logo_b64() else '',
-        unsafe_allow_html=True,
-    )
+with st.container():
+    st.markdown("<div class='filter-card'>", unsafe_allow_html=True)
+    st.subheader("Search Inputs")
+    i1, i2, i3, i4 = st.columns([1, 1.4, 1, 0.8])
 
-    st.header("Search Inputs")
+    with i1:
+        city_options = sorted(lad_df["city"].dropna().str.title().unique())
+        if st.session_state.get("global_city") not in city_options:
+            st.session_state["global_city"] = city_options[0]
+        city = st.selectbox("Select City", city_options, key="global_city")
 
-    city_options = sorted(lad_df["city"].dropna().str.title().unique())
-    default_city = st.session_state.get("city")
-    city = st.selectbox(
-        "Select City",
-        city_options,
-        index=city_options.index(default_city) if default_city in city_options else 0,
-    )
+    with i2:
+        budget = st.slider(
+            "Investment Budget (£)", 50000, 1000000, step=10000, key="global_budget",
+        )
 
-    budget = st.slider(
-        "Investment Budget (£)",
-        50000,
-        1000000,
-        st.session_state.get("budget", 250000),
-        step=10000
-    )
+    with i3:
+        profile = st.selectbox(
+            "Investor Profile",
+            ["First-time investor", "Multi-property host"],
+            key="global_profile",
+        )
 
-    profile_options = ["First-time investor", "Multi-property host"]
-    default_profile = st.session_state.get("profile")
-    profile = st.selectbox(
-        "Investor Profile",
-        profile_options,
-        index=profile_options.index(default_profile) if default_profile in profile_options else 0,
-    )
+    with i4:
+        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+        analyse = st.button("Analyse Investment")
 
-    room_options = [1, 2, 3, 4, 5]
-    default_rooms = st.session_state.get("bedrooms")
-    rooms = st.selectbox(
-        "Bedrooms",
-        room_options,
-        index=room_options.index(default_rooms) if default_rooms in room_options else 0,
-    )
-
-    analyse = st.button("Analyse Investment")
+    st.markdown("</div>", unsafe_allow_html=True)
 
     if analyse:
         st.session_state.score_page = "Dashboard"
@@ -212,7 +197,6 @@ if st.session_state.score_page == "Home":
             <p><b>City:</b> {city}</p>
             <p><b>Budget:</b> £{budget:,}</p>
             <p><b>Investor Type:</b> {profile}</p>
-            <p><b>Bedrooms:</b> {rooms}</p>
             </div>
             """,
             unsafe_allow_html=True

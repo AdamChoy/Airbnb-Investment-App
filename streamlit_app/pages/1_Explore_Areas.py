@@ -40,15 +40,18 @@ with st.container():
     with f1:
         cities = ["All"] + sorted(msoa_df["city"].dropna().str.title().unique().tolist())
         query_city = st.query_params.get("city")
-        if query_city and "city_filter" not in st.session_state:
+        if query_city and "global_city_filter" not in st.session_state:
             match = next((c for c in cities if c.lower() == query_city.lower()), None)
             if match:
-                st.session_state["city_filter"] = match
-        city = st.selectbox("City", cities, key="city_filter")
+                st.session_state["global_city_filter"] = match
+        if st.session_state.get("global_city_filter") not in cities:
+            st.session_state["global_city_filter"] = "All"
+        city = st.selectbox("City", cities, key="global_city_filter")
 
     with f2:
         max_price = int(msoa_df["median_house_price_2025"].dropna().max())
-        price_range = st.slider("Max House Price (£)", 0, max_price, max_price, step=25000,
+        default_price = min(st.session_state.get("global_budget", max_price), max_price)
+        price_range = st.slider("Max House Price (£)", 0, max_price, default_price, step=25000,
                                 format="£%d")
 
     with f3:

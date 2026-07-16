@@ -33,7 +33,10 @@ if msoa_sent is None:
     st.warning("Sentiment data not found. Run notebook 05 and place msoa_review_sentiment.csv and lad_review_sentiment.csv in the data/ folder.")
     st.stop()
 
-city_filter = st.selectbox("Filter by city", ["All"] + sorted(msoa_sent["city"].dropna().str.title().unique().tolist()))
+cities = ["All"] + sorted(msoa_sent["city"].dropna().str.title().unique().tolist())
+if st.session_state.get("global_city_filter") not in cities:
+    st.session_state["global_city_filter"] = "All"
+city_filter = st.selectbox("Filter by city", cities, key="global_city_filter")
 df = msoa_sent if city_filter == "All" else msoa_sent[msoa_sent["city"].str.title() == city_filter]
 
 # ── Sentiment distribution ────────────────────────────────────────────────────

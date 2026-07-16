@@ -27,7 +27,10 @@ st.markdown(f"<h2 style='color:{NAVY};font-weight:800;margin-bottom:4px;'>Yield 
 st.markdown(f"<p style='color:{MID};margin-bottom:24px;'>Compare STR and LTR gross yields across cities and neighbourhoods.</p>", unsafe_allow_html=True)
 render_stripes()
 
-city_filter = st.selectbox("Filter by city", ["All"] + sorted(msoa_df["city"].dropna().str.title().unique().tolist()))
+cities = ["All"] + sorted(msoa_df["city"].dropna().str.title().unique().tolist())
+if st.session_state.get("global_city_filter") not in cities:
+    st.session_state["global_city_filter"] = "All"
+city_filter = st.selectbox("Filter by city", cities, key="global_city_filter")
 plot_df = msoa_df if city_filter == "All" else msoa_df[msoa_df["city"].str.title() == city_filter]
 plot_df = plot_df.dropna(subset=["str_gross_yield", "ltr_gross_yield"])
 
