@@ -386,17 +386,89 @@ elif st.session_state.page == "Risks":
     if best_area is None:
         st.warning("No risk data available.")
     else:
-        st.markdown(
-            f"""
-            <div class="card">
-            <h3>Risk overview for {best_area['lad_name']}</h3>
-            <p>
-            This section highlights key investment risks that could affect
-            short-term rental performance.
-            </p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
 
+        # -----------------------------
+        # Calculate Overall Risk
+        # -----------------------------
+        if best_area["saturation_score"] < 40:
+            overall_risk = "🔴 High"
+        elif best_area["saturation_score"] < 70:
+            overall_risk = "🟡 Medium"
+        else:
+            overall_risk = "🟢 Low"
+
+        st.markdown(f"## Overall Risk Level: {overall_risk}")
+
+        # -----------------------------
+        # Risk Cards
+        # -----------------------------
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            if best_area["total_listings"] > city_df["total_listings"].median():
+                competition = "High"
+            else:
+                competition = "Low"
+
+            st.info(f"""
+### 🏠 Market Saturation
+
+**Risk Level:** {competition}
+
+There are **{int(best_area['total_listings'])} Airbnb listings** in this area.
+
+Higher numbers indicate greater competition between hosts.
+""")
+
+            st.info(f"""
+### 💷 Property Price
+
+**Risk Level:** Medium
+
+Higher property prices require a larger upfront investment and may increase the time needed to recover costs.
+""")
+
+        with col2:
+
+            occupancy = 365 - best_area["avg_availability_365"]
+
+            if occupancy > 250:
+                occupancy_risk = "Low"
+            elif occupancy > 180:
+                occupancy_risk = "Medium"
+            else:
+                occupancy_risk = "High"
+
+            st.info(f"""
+### 📅 Occupancy
+
+**Risk Level:** {occupancy_risk}
+
+Estimated booked nights per year: **{int(occupancy)}**
+""")
+
+            st.info("""
+### ⚖️ Regulation
+
+**Risk Level:** Medium
+
+Future government or local council regulations may affect short-term rental activity.
+""")
+
+        st.markdown("---")
+
+        st.subheader("Risk Summary")
+
+        st.markdown(f"""
+Although **{best_area['lad_name']}** has the highest investment score,
+investors should also consider:
+
+- Competition from nearby Airbnb properties
+- Upfront property purchase costs
+- Seasonal changes in occupancy
+- Possible future changes to Airbnb regulations
+
+Overall, **{best_area['lad_name']}** offers strong investment potential, but these risks should be considered before making a purchase.
+""")
         
