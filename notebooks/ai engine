@@ -1,0 +1,183 @@
+import streamlit as st
+from pyspark.sql.functions import col
+from openai import OpenAI
+
+client = OpenAI()
+
+# ---------- Helpers ----------
+
+def spark_to_dict(row):
+    return row.asDict() if row is not None else {}
+
+def summarise_reviews_with_llm(area_name, reviews):
+    prompt = f"""
+    You are analysing Airbnb guest reviews for the area: {area_name}.
+    Only summarise themes that appear in the provided reviews.
+    Do NOT invent facts or mention anything not present in the text.
+
+    Reviews:
+    {reviews}
+
+    Extract:
+    - Common positive themes
+    - Common negative themes
+    - Sentiment summary (positive / mixed / negative)
+    - 3–5 bullet points of key insights
+
+    Return output as a concise explanation in plain English.
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2
+    )
+    return response.choices[0].message.content
+
+
+def explain_investment_score(area_metrics: dict, persona: dict):
+    prompt = f"""
+    You are generating an explanation for an investment score.
+    Only use the metrics provided below. Do NOT invent external facts.
+
+    Area metrics:
+    {area_metrics}
+
+    Persona:
+    {persona}
+
+    Explain:
+    - Why the investment score is high or low
+    - Which metrics contributed most (based on persona weights)
+    - Any risks or weaknesses visible in the data
+    - A concise 3–4 sentence summary in plain English
+
+    Keep the explanation factual and grounded in the numbers.
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2
+    )
+    return response.choices[0].message.content
+
+
+def recommend_area(area_metrics: dict, review_summary: str, persona: dict):
+    prompt = f"""
+    You are generating a final investment recommendation for an area.
+    Only use the data provided. Do NOT invent external facts.
+
+    Area metrics:
+    {area_metrics}
+
+    Review summary:
+    {review_summary}
+
+    Persona:
+    {persona}
+
+    Produce:
+    - A clear recommendation (good / moderate / poor fit)
+    - Why this area suits the persona
+    - How the review themes support or weaken the score
+    - A final 3–5 bullet point summary
+
+    Keep everything grounded in the supplied data.
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2
+    )
+    return response.choices[0].message.content
+
+
+# ---------- Streamlit UI ----------
+
+st.title("InvestIn – AI‑Powered Area Insights")
+st.write("Compare areas using **investment scores + guest review themes**, tailored to your investor persona.")
+
+# Assume these Spark tables already exist in your Databricks environment:
+# investment_scores: LAD / area metrics with investment_score
+# df: raw Airbnb listing + review data
+
+# Sidebar – persona selection
+st.sidebar.header("Investor Persona")
+
+persona_type = st.sidebar.selectbox(
+    "Persona type",
+    ["yield", "balanced", "growth"]
+)
+
+if persona_type == "yield":
+    persona = {
+        "type": "yield",
+        "weight_revenue": 0.5,
+        "weight_occupancy": 0.3,
+        "weight_risk": 0.2
+    }
+elif persona_type == "growth":
+    persona = {
+        "type": "growth",
+        "weight_revenue": 0.4,
+        "weight_occupancy": 0.3,
+        "weight_risk": 0.3
+    }
+else:  # balanced
+    persona = {
+        "type": "balanced",
+        "weight_revenue": 0.33,
+        "weight_occupancy": 0.33,
+        "weight_risk": 0.34
+    }
+
+st.sidebar.write("Persona weights:")
+st.sidebar.json(persona)
+
+# Main – area selection
+# Get list of areas from investment_scores
+areas_df = investment_scores.select("lad_name").distinct()
+areas = [r["lad_name"] for r in areas_df.collect()]
+
+selected_area = st.selectbox("Select an area", areas)
+
+if st.button("Analyse Area with AI"):
+    # 1. Get metrics for selected area
+    row = investment_scores.filter(col("lad_name") == selected_area).first()
+    area_metrics = spark_to_dict(row)
+
+    if not area_metrics:
+        st.error("No metrics found for this area.")
+    else:
+        st.subheader("Investment Metrics")
+        st.json(area_metrics)
+
+        # 2. Get reviews for this area (by neighbourhood or LAD)
+        reviews_rows = df.filter(col("neighbourhood_cleansed") == selected_area).select("review_text").collect()
+        reviews = [r["review_text"] for r in reviews_rows]
+
+        if len(reviews) == 0:
+            st.warning("No reviews found for this area.")
+        else:
+            # 3. AI: summarise reviews
+            with st.spinner("Summarising guest reviews with AI..."):
+                review_summary = summarise_reviews_with_llm(selected_area, reviews)
+
+            st.subheader("AI Review Summary")
+            st.write(review_summary)
+
+            # 4. AI: explain investment score
+            with st.spinner("Explaining investment score with AI..."):
+                score_explanation = explain_investment_score(area_metrics, persona)
+
+            st.subheader("AI Explanation of Investment Score")
+            st.write(score_explanation)
+
+            # 5. AI: final recommendation
+            with st.spinner("Generating final recommendation..."):
+                recommendation = recommend_area(area_metrics, review_summary, persona)
+
+            st.subheader("AI Recommendation")
+            st.write(recommendation)
