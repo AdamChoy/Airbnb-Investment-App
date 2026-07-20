@@ -5,12 +5,13 @@ import json
 import os
 import base64
 import plotly.express as px
+from theme import TEAL
 
 st.set_page_config(
     page_title="InvestStay",
     page_icon="🏙️",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="collapsed",  
 )
 
 
@@ -68,18 +69,6 @@ logo_b64 = get_logo_b64()
 logo_img     = f'<img src="data:image/png;base64,{logo_b64}" style="height:220px;width:auto;"/>' if logo_b64 else ""
 navbar_logo_img = f'<img src="data:image/png;base64,{logo_b64}" style="height:82px;width:auto;display:block;transform:translateY(-6px);"/>' if logo_b64 else ""
 
-# ── Load city photos ──────────────────────────────────────────────────────────
-def get_city_img_tag(city_name):
-    assets_dir = os.path.join(os.path.dirname(__file__), "assets")
-    for ext in (".jpg", ".jpeg", ".png", ".webp"):
-        path = os.path.join(assets_dir, f"{city_name.lower()}{ext}")
-        if os.path.exists(path):
-            mime = "jpeg" if ext in (".jpg", ".jpeg") else ext.lstrip(".")
-            with open(path, "rb") as f:
-                b64 = base64.b64encode(f.read()).decode()
-            return f'<img src="data:image/{mime};base64,{b64}" alt="{city_name}"/>'
-    return ""
-
 # ── Load hero carousel images ───────────────────────────────────────────────────
 def get_asset_uri(stem):
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
@@ -107,15 +96,6 @@ hero_slides_html = "".join(
     for i, uri in enumerate(hero_slide_uris)
 )
 hero_bg_css = "background: var(--bg);" if not hero_slide_uris else ""
-
-CITIES = ["London", "Manchester", "Bristol"]
-city_cards = "".join([
-    f'''<a class="city-card" href="/Explore_Areas?city={name}" target="_self">
-        {get_city_img_tag(name) or '<div class="city-card-placeholder"></div>'}
-        <div class="city-card-label">{name}</div>
-    </a>'''
-    for name in CITIES
-])
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 @st.cache_data
@@ -153,59 +133,6 @@ top_delta      = msoa_df["str_vs_ltr_yield_delta"].max()
 avg_ltr_yield  = msoa_df["ltr_gross_yield"].mean()
 cities_covered = msoa_df["city"].nunique()
 
-top10 = (
-    msoa_df[msoa_df["str_vs_ltr_yield_delta"].notna()]
-    .nlargest(10, "str_vs_ltr_yield_delta")
-    [["city","msoa_name","lad_name","median_nightly_price",
-      "str_gross_yield","ltr_gross_yield","str_vs_ltr_yield_delta",
-      "median_house_price_2025","less_than_15_minute_walk"]]
-    .copy()
-)
-top10["str_gross_yield"]         = (top10["str_gross_yield"]*100).round(2).astype(str)+"%"
-top10["ltr_gross_yield"]         = (top10["ltr_gross_yield"]*100).round(2).astype(str)+"%"
-top10["str_vs_ltr_yield_delta"]  = (top10["str_vs_ltr_yield_delta"]*100).round(2).astype(str)+"%"
-top10["median_house_price_2025"] = top10["median_house_price_2025"].apply(fmt_money)
-top10["median_nightly_price"]    = top10["median_nightly_price"].apply(fmt_money)
-top10.columns = ["City","MSOA Name","LAD Name","Nightly Price","STR Yield","LTR Yield","Delta","House Price","15-min Rail %"]
-top10["City"] = top10["City"].str.title()
-
-city_summary = (
-    msoa_df.groupby("city")
-    .agg(MSOAs=("msoa_code","count"), Listings=("total_listings","sum"),
-         STR=("str_gross_yield","mean"), LTR=("ltr_gross_yield","mean"),
-         Delta=("str_vs_ltr_yield_delta","mean"), HP=("median_house_price_2025","mean"))
-    .reset_index()
-)
-city_summary["STR"]      = (city_summary["STR"]*100).round(2).astype(str)+"%"
-city_summary["LTR"]      = (city_summary["LTR"]*100).round(2).astype(str)+"%"
-city_summary["Delta"]    = (city_summary["Delta"]*100).round(2).astype(str)+"%"
-city_summary["HP"]       = city_summary["HP"].apply(fmt_money)
-city_summary["Listings"] = city_summary["Listings"].apply(lambda x: f"{x:,}")
-city_summary.columns     = ["City","MSOAs","Listings","Avg STR Yield","Avg LTR Yield","Avg Delta","Avg House Price"]
-city_summary["City"] = city_summary["City"].str.title()
-
-# ── Styled HTML tables ──────────────────────────────────────────────────────────
-def df_to_html_table(df, right_align_from=1, highlight_col=None):
-    cols = df.columns.tolist()
-    thead_cells = "".join(
-        f'<th style="text-align:{"right" if i >= right_align_from else "left"};">{c}</th>'
-        for i, c in enumerate(cols)
-    )
-    body_rows = ""
-    for _, row in df.iterrows():
-        cells = ""
-        for i, c in enumerate(cols):
-            align = "right" if i >= right_align_from else "left"
-            cls = ' class="delta-cell"' if c == highlight_col else ""
-            cells += f'<td style="text-align:{align};"{cls}>{row[c]}</td>'
-        body_rows += f"<tr>{cells}</tr>"
-    return f'''<div class="table-card"><table class="styled-table">
-        <thead><tr>{thead_cells}</tr></thead>
-        <tbody>{body_rows}</tbody>
-    </table></div>'''
-
-top10_table_html = df_to_html_table(top10, right_align_from=3, highlight_col="Delta")
-city_summary_table_html = df_to_html_table(city_summary, right_align_from=1, highlight_col="Avg Delta")
 
 # ── Metrics marquee (duplicated once for a seamless scroll loop) ────────────────
 METRICS = [
@@ -371,16 +298,14 @@ body:has(.settings-btn:hover) .st-key-settings_menu,
 .side-rail a:hover {{ transform: scale(1.08); background: var(--card-alt-hover); }}
 body:has(#section-home:target) .side-rail a[href="#section-home"],
 body:has(#section-metrics:target) .side-rail a[href="#section-metrics"],
-body:has(#section-cities:target) .side-rail a[href="#section-cities"],
-body:has(#section-tables:target) .side-rail a[href="#section-tables"],
+body:has(#section-map:target) .side-rail a[href="#section-map"],
 body:has(#section-footer:target) .side-rail a[href="#section-footer"] {{
     background: var(--text);
     color: var(--bg);
 }}
 .side-rail a[href="#section-home"] {{ background: var(--text); color: var(--bg); }}
 body:has(#section-metrics:target) .side-rail a[href="#section-home"],
-body:has(#section-cities:target) .side-rail a[href="#section-home"],
-body:has(#section-tables:target) .side-rail a[href="#section-home"],
+body:has(#section-map:target) .side-rail a[href="#section-home"],
 body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     background: var(--card-alt-bg);
     color: var(--text);
@@ -466,27 +391,6 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
 .settings-btn svg {{ width: 18px; height: 18px; }}
 .settings-btn:hover {{ transform: rotate(45deg); background: var(--card-alt-hover); }}
 
-/* ── Investor setup ── */
-.st-key-investor_setup {{
-    margin: 8px 32px 32px;
-    padding: 28px 48px 32px;
-    background: var(--card-bg);
-    border-radius: 20px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-}}
-.investor-setup-title {{
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: #0D9488;
-    margin-bottom: 18px;
-}}
-.st-key-investor_setup label p {{
-    color: var(--text) !important;
-    font-family: 'Inter', sans-serif;
-}}
-
 /* ── Hero card ── */
 .hero-card {{
     margin: 0;
@@ -520,7 +424,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     .hero-slide {{ animation: none; opacity: 1; }}
 }}
 .hero-inner {{
-    padding: 40px 48px 32px 72px;
+    padding: 40px 48px 44px 72px;
     position: relative;
     z-index: 2;
 }}
@@ -531,20 +435,44 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     margin-bottom: 48px;
     letter-spacing: -0.05em;
 }}
-.hero-heading {{
-    font-size: clamp(3.8rem, 7.8vw, 6.6rem);
+.hero-inner h1.hero-heading {{
+    font-size: clamp(2.4rem, 4.4vw, 3.8rem);
     font-weight: 800;
-    line-height: 1.0;
-    letter-spacing: -0.04em;
-    color: #ffffff !important;
+    line-height: 0.98;
+    letter-spacing: -0.05em;
+    color: #ffffff;
     margin-bottom: 0;
 }}
-.hero-subheading {{
-    font-size: 1.45rem;
+.hero-inner h1.hero-heading em {{
+    color: {TEAL};
+    font-style: normal;
+}}
+.hero-inner p.hero-subheading {{
+    font-size: clamp(1.05rem, 1.4vw, 1.3rem);
     font-weight: 400;
+    color: #ffffff;
+    opacity: 0.75;
+    margin-top: 20px;
+    max-width: 640px;
+    line-height: 1.5;
+}}
+.hero-inner .hero-cta-btn {{
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 32px;
+    padding: 13px 26px;
+    background: {TEAL};
     color: #ffffff !important;
-    opacity: 0.85;
-    margin-top: 16px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 8px;
+    transition: transform 0.15s ease, background 0.15s ease;
+}}
+.hero-inner .hero-cta-btn:hover {{
+    background: #0b7a70;
+    transform: translateY(-1px);
 }}
 
 /* ── Gradient stripes ── */
@@ -567,14 +495,6 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
 .metrics-section {{
     padding: 24px 48px 48px;
     margin: 0 32px;
-}}
-.metrics-heading {{
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--text-muted);
-    margin-bottom: 32px;
 }}
 .metrics-marquee {{
     overflow: hidden;
@@ -619,60 +539,6 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     letter-spacing: 0.06em;
 }}
 
-/* ── City cards ── */
-.cities-section {{
-    padding: 0 48px 48px;
-    margin: 0 32px;
-}}
-.cities-grid {{
-    display: grid;
-    grid-template-columns: repeat(3,1fr);
-    gap: 24px;
-}}
-.city-card {{
-    position: relative;
-    display: block;
-    height: 260px;
-    border-radius: 16px;
-    overflow: hidden;
-    text-decoration: none;
-    background: #1a1a1a;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}}
-.city-card:hover {{
-    transform: translateY(-4px);
-    box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 28px 4px rgba(255,255,255,0.6), 0 10px 24px rgba(0,0,0,0.2);
-}}
-.city-card img {{
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}}
-.city-card-placeholder {{
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, #1B4F72, #10c87a);
-}}
-.city-card::after {{
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.65) 100%);
-}}
-.city-card-label {{
-    position: absolute;
-    left: 20px;
-    bottom: 16px;
-    z-index: 2;
-    color: #fff;
-    font-size: 1.3rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-}}
-
 /* ── Content section ── */
 .content-section {{
     padding: 0 48px 24px;
@@ -689,45 +555,10 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     border-top: 1px solid var(--border);
 }}
 
-/* ── Styled tables ── */
-.table-card {{
-    background: var(--card-bg);
-    border-radius: 16px;
-    overflow-x: auto;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-    margin-bottom: 8px;
-}}
 [data-testid="stPlotlyChart"] {{
     border-radius: 20px;
     overflow: hidden;
     box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-}}
-.styled-table {{
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem;
-    white-space: nowrap;
-}}
-.styled-table thead th {{
-    background: #0D9488;
-    color: #fff;
-    font-size: 0.68rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 14px 20px;
-}}
-.styled-table tbody td {{
-    padding: 12px 20px;
-    color: var(--text);
-    border-bottom: 1px solid var(--border);
-}}
-.styled-table tbody tr:nth-child(even) {{ background: var(--table-row-alt); }}
-.styled-table tbody tr:hover {{ background: var(--card-alt-bg); }}
-.styled-table tbody tr:last-child td {{ border-bottom: none; }}
-.styled-table td.delta-cell {{
-    color: #0D9488;
-    font-weight: 700;
 }}
 
 /* ── Footer grid ── */
@@ -800,11 +631,8 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     <a href="#section-metrics" target="_self" title="Pipeline metrics">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20V10"/><path d="M12 20V4"/><path d="M20 20v-7"/></svg>
     </a>
-    <a href="#section-cities" target="_self" title="Explore by city">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.3"/></svg>
-    </a>
-    <a href="#section-tables" target="_self" title="Investment tables">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18"/><path d="M9 10v10"/></svg>
+    <a href="#section-map" target="_self" title="Coverage map">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 20 3 17V4l6 3 6-3 6 3v13l-6-3-6 3Z"/><path d="M9 7v13"/><path d="M15 4v13"/></svg>
     </a>
     <a href="#section-footer" target="_self" title="Footer & sources">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-5"/><path d="M12 8h.01"/></svg>
@@ -847,6 +675,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
             Find your perfect property to invest in.
         </h1>
         <p class="hero-subheading">From raw data to real returns. Built on open data. Designed for smarter property investment.</p>
+        <a href="/Investment_Score" target="_self" class="hero-cta-btn">Analyse a property →</a>
     </div>
 </div>
 <div class="stripes">
@@ -896,37 +725,6 @@ components.html("""
 </script>
 """, height=0)
 
-# ── Investor Setup ──────────────────────────────────────────────────────────────
-with st.container(key="investor_setup"):
-    st.markdown('<div class="investor-setup-title">Investor Setup</div>', unsafe_allow_html=True)
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        city_options = sorted(msoa_df["city"].dropna().str.title().unique())
-        if st.session_state.get("global_city") not in city_options:
-            st.session_state["global_city"] = city_options[0]
-        investor_city = st.selectbox("City", city_options, key="global_city")
-    with c2:
-        investor_budget = st.slider(
-            f"Investment Budget ({CURRENCY_SYMBOL})", 50000, 1000000, 250000, step=10000,
-            format=f"{CURRENCY_SYMBOL}%d", key="global_budget",
-        )
-    with c3:
-        investor_profile = st.selectbox(
-            "Investor Profile",
-            ["First-time investor", "Multi-property host"],
-            key="global_profile",
-        )
-st.session_state["global_city_filter"] = investor_city
-st.markdown(f"""
-<!-- ═══ CITY CARDS ═══ -->
-<div class="cities-section" id="section-cities">
-    <div class="metrics-heading">Explore by city</div>
-    <div class="cities-grid">
-        {city_cards}
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
 # ── Coverage map ─────────────────────────────────────────────────────────────
 if lad_geojson:
     map_df = lad_df[lad_df["city"].isin(["london", "bristol", "manchester"])].copy()
@@ -934,7 +732,7 @@ if lad_geojson:
     map_df["STR Gross Yield (%)"] = (map_df["str_gross_yield"] * 100).round(2)
 
     st.markdown("""
-    <div class="content-section" style="padding-bottom:0;">
+    <div id="section-map" class="content-section" style="padding-bottom:0;">
         <div class="section-title" style="border-top:none;padding-top:0;">Three Cities — London, Manchester and Bristol</div>
     </div>
     """, unsafe_allow_html=True)
@@ -961,23 +759,10 @@ if lad_geojson:
         font_family="Inter",
     )
     st.markdown('<div class="content-section" style="padding-top:0;">', unsafe_allow_html=True)
-    map_col_l, map_col_mid, map_col_r = st.columns([1, 3, 1])
+    map_col_l, map_col_mid, map_col_r = st.columns([1, 10.5, 1])
     with map_col_mid:
         st.plotly_chart(map_fig, use_container_width=True, config={"scrollZoom": False})
     st.markdown('</div>', unsafe_allow_html=True)
-
-st.markdown(f"""
-<!-- ═══ TABLES ═══ -->
-<div class="content-section" id="section-tables">
-    <div class="section-title">Top Investment Opportunities — STR vs LTR Yield Delta</div>
-    {top10_table_html}
-</div>
-
-<div class="content-section">
-    <div class="section-title">City Summary</div>
-    {city_summary_table_html}
-</div>
-""", unsafe_allow_html=True)
 
 
 # ── Combined footer ───────────────────────────────────────────────────────────
@@ -998,7 +783,7 @@ st.markdown(f"""
     <div>
         <div class="footer-col-title">Explore</div>
         <ul class="footer-links">
-            <li><a href="#section-tables" target="_self">Top Opportunities</a></li>
+            <li><a href="#section-map" target="_self">Coverage Map</a></li>
             <li><a href="/Explore_Areas" target="_self">City Explorer</a></li>
             <li><a href="/Explore_Areas" target="_self">MSOA Search</a></li>
         </ul>

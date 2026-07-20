@@ -1,10 +1,13 @@
+import base64
+import json
 import os
 import sys
 import pandas as pd
+import plotly.express as px
 import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from theme import TEAL, inject_css, _get_logo_b64, render_navbar, render_stripes
+from theme import TEAL, get_theme, inject_css, _get_logo_b64, render_navbar, render_stripes
 from ai_insight import generate_insight
 
 st.set_page_config(page_title="Investment Score · InvestStay", layout="wide", initial_sidebar_state="collapsed")
@@ -18,10 +21,36 @@ ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets")
 lad_df = pd.read_csv(os.path.join(DATA_DIR, "lad_investment_summary.csv"))
 msoa_df = pd.read_csv(os.path.join(DATA_DIR, "msoa_investment_summary.csv"))
 
+@st.cache_data
+def load_msoa_geojson():
+    path = os.path.join(DATA_DIR, "msoa_boundaries.geojson")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+msoa_geojson = load_msoa_geojson()
+
+# -----------------------------
+# CITY CARDS
+# -----------------------------
+def get_city_img_tag(city_name):
+    for ext in (".jpg", ".jpeg", ".png", ".webp"):
+        path = os.path.join(ASSETS_DIR, f"{city_name.lower()}{ext}")
+        if os.path.exists(path):
+            mime = "jpeg" if ext in (".jpg", ".jpeg") else ext.lstrip(".")
+            with open(path, "rb") as f:
+                b64 = base64.b64encode(f.read()).decode()
+            return f'<img src="data:image/{mime};base64,{b64}" alt="{city_name}"/>'
+    return ""
+
+CITIES = ["London", "Manchester", "Bristol"]
+
 # -----------------------------
 # STYLE
 # -----------------------------
-t = inject_css(extra_css=f"""
+t = get_theme()
+inject_css(extra_css=f"""
 .main-title {{ font-size: 42px; font-weight: 800; }}
 .teal {{ color: {TEAL}; }}
 .score {{ font-size: 54px; font-weight: 800; color: {TEAL}; }}
@@ -30,8 +59,122 @@ t = inject_css(extra_css=f"""
     border-radius: 12px; padding: 0.7rem 1.2rem; font-weight: 600;
 }}
 .stButton > button:hover {{ background-color: #0b7d73; color: white; }}
+.step-label {{
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: {TEAL};
+    margin-bottom: 10px;
+}}
+.cities-grid {{
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    gap: 24px;
+    margin-bottom: 28px;
+}}
+.city-card.is-selected, .city-card:focus, .city-card:focus-visible {{
+    outline: none;
+    box-shadow: 0 0 0 3px {TEAL};
+}}
+.city-card {{
+    position: relative;
+    display: block;
+    height: 220px;
+    border-radius: 16px;
+    overflow: hidden;
+    text-decoration: none;
+    background: #1a1a1a;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}}
+.city-card:hover {{
+    transform: translateY(-4px);
+    box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 28px 4px rgba(255,255,255,0.6), 0 10px 24px rgba(0,0,0,0.2);
+}}
+.city-card img {{
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}}
+.city-card-placeholder {{
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, #1B4F72, #10c87a);
+}}
+.city-card::after {{
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.65) 100%);
+}}
+.city-card-label {{
+    position: absolute;
+    left: 20px;
+    bottom: 16px;
+    z-index: 2;
+    color: #fff;
+    font-size: 1.3rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}}
+.table-card {{
+    background: {t['card_bg']};
+    border-radius: 16px;
+    overflow: auto;
+    max-height: 480px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+    margin-bottom: 8px;
+}}
+.styled-table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}}
+.styled-table thead th {{
+    position: sticky;
+    top: 0;
+    background: {TEAL};
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 14px 20px;
+    text-align: left;
+}}
+.styled-table tbody td {{
+    padding: 12px 20px;
+    color: {t['text']};
+    border-bottom: 1px solid {t['border']};
+}}
+.styled-table tbody tr:nth-child(even) {{ background: {t['card_alt_bg']}; }}
+.styled-table tbody tr:hover {{ background: {t['card_alt_hover']}; }}
+.styled-table tbody tr:last-child td {{ border-bottom: none; }}
+.styled-table td.score-cell {{
+    color: {TEAL};
+    font-weight: 700;
+}}
+[data-testid="stPlotlyChart"] {{
+    border: 1px solid {t['border']};
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}}
 """)
 render_navbar(active="Score")
+
+st.markdown("""
+<style>
+[data-testid="stMainBlockContainer"], .block-container {
+    padding-left: 64px !important;
+    padding-right: 64px !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # -----------------------------
 # SCORING
@@ -73,51 +216,213 @@ if "score_page" not in st.session_state:
     st.session_state.score_page = "Dashboard" if "city" in st.session_state else "Home"
 
 # -----------------------------
+# CITY SELECTION (city cards toggle ?cities= on click, read back here)
+# -----------------------------
+city_options = sorted(lad_df["city"].dropna().str.title().unique())
+
+selected_cities = [c for c in st.session_state.get("global_cities", []) if c in city_options]
+if not selected_cities:
+    selected_cities = [city_options[0]]
+
+qp_cities = [c.title() for c in st.query_params.get("cities", "").split(",") if c.strip()]
+qp_cities = [c for c in qp_cities if c in city_options]
+if qp_cities:
+    selected_cities = qp_cities
+
+st.session_state["global_cities"] = selected_cities
+cities = selected_cities
+
+# -----------------------------
+# LAD SELECTION (auto-selects all LADs in the chosen cities; user can narrow down)
+# -----------------------------
+lad_options = sorted(lad_df[lad_df["city"].str.title().isin(cities)]["lad_name"].dropna().unique())
+
+prev_lads = [l for l in st.session_state.get("global_lads", []) if l in lad_options]
+if st.session_state.get("global_lads_cities") != cities or not prev_lads:
+    prev_lads = lad_options
+
+st.session_state["global_lads_cities"] = cities
+st.session_state["global_lads"] = prev_lads
+
+# -----------------------------
 # SEARCH INPUTS (persist across pages via shared session_state keys)
 # -----------------------------
 with st.container():
-    st.markdown("<div class='filter-card'>", unsafe_allow_html=True)
-    st.subheader("Search Inputs")
-    i1, i2, i3, i4 = st.columns([1, 1.4, 1, 0.8])
+    st.markdown(
+        '<div class="main-title" style="margin-bottom:20px;">Find your perfect <span class="teal">property</span></div>',
+        unsafe_allow_html=True,
+    )
 
-    with i1:
-        city_options = sorted(lad_df["city"].dropna().str.title().unique())
-        if st.session_state.get("global_city") not in city_options:
-            st.session_state["global_city"] = city_options[0]
-        city = st.selectbox("Select City", city_options, key="global_city")
+    st.markdown("<div class='step-label'>1. Select your areas</div>", unsafe_allow_html=True)
 
-    with i2:
-        budget = st.slider(
-            "Investment Budget (£)", 50000, 1000000, step=10000, key="global_budget",
-        )
+    def _toggle_href(name):
+        s = set(selected_cities)
+        if name in s:
+            if len(s) > 1:
+                s.discard(name)
+        else:
+            s.add(name)
+        return "?cities=" + ",".join(sorted(s))
 
-    with i3:
-        profile = st.selectbox(
-            "Investor Profile",
-            ["First-time investor", "Multi-property host"],
-            key="global_profile",
-        )
+    city_cards = "".join([
+        f'''<a class="city-card{" is-selected" if name in selected_cities else ""}" href="{_toggle_href(name)}" target="_self">
+            {get_city_img_tag(name) or '<div class="city-card-placeholder"></div>'}
+            <div class="city-card-label">{name}</div>
+        </a>'''
+        for name in CITIES
+    ])
+    st.markdown(f'<div class="cities-grid">{city_cards}</div>', unsafe_allow_html=True)
 
-    with i4:
-        st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-        analyse = st.button("Analyse Investment")
+    st.markdown("<div class='step-label'>2. Local Authority Districts</div>", unsafe_allow_html=True)
+    lads = st.multiselect(
+        "Local Authority Districts",
+        options=lad_options,
+        key="global_lads",
+        label_visibility="collapsed",
+    )
 
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<div class='step-label'>3. Choose your investment budget (£)</div>", unsafe_allow_html=True)
+    budget_min, budget_max = st.slider(
+        "Choose your investment budget (£)", 50000, 1000000, value=(50000, 300000), step=10000,
+        key="global_budget_range", label_visibility="collapsed",
+    )
+
+    st.markdown("<div class='step-label'>4. Investor profile</div>", unsafe_allow_html=True)
+    profile = st.selectbox(
+        "Investor Profile",
+        ["First-time investor", "Multi-property host"],
+        key="global_profile",
+        label_visibility="collapsed",
+    )
+
+    analyse = st.button("Analyse Investment")
 
     if analyse:
         st.session_state.score_page = "Dashboard"
 
 # -----------------------------
+# SUITABLE MSOAS
+# -----------------------------
+suitable_msoas = msoa_df[
+    msoa_df["city"].str.title().isin(cities) & msoa_df["lad_name"].isin(lads)
+].copy()
+if "median_house_price_2025" in suitable_msoas.columns:
+    suitable_msoas = suitable_msoas[
+        suitable_msoas["median_house_price_2025"].between(budget_min, budget_max)
+    ]
+suitable_msoas = suitable_msoas.sort_values("investment_score", ascending=False)
+
+st.markdown("<div class='step-label' style='margin-top:8px;'>Suitable areas</div>", unsafe_allow_html=True)
+
+if suitable_msoas.empty:
+    st.warning(f"Out of budget — no areas in {', '.join(cities)} fall within £{budget_min:,}–£{budget_max:,}. Try adjusting your budget.")
+else:
+    msoa_table = suitable_msoas[
+        ["msoa_name", "city", "lad_name", "median_house_price_2025",
+         "str_gross_yield", "ltr_gross_yield", "investment_score"]
+    ].copy()
+    msoa_table["city"] = msoa_table["city"].str.title()
+    msoa_table["median_house_price_2025"] = msoa_table["median_house_price_2025"].apply(lambda x: f"£{x:,.0f}")
+    msoa_table["str_gross_yield"] = (msoa_table["str_gross_yield"] * 100).round(2).astype(str) + "%"
+    msoa_table["ltr_gross_yield"] = (msoa_table["ltr_gross_yield"] * 100).round(2).astype(str) + "%"
+    msoa_table["investment_score"] = suitable_msoas["investment_score"].round(1)
+    msoa_table.columns = [
+        "MSOA", "City", "Local Authority District", "House Price",
+        "Short-Term Rental Yield", "Long-Term Rental Yield", "Investment Score",
+    ]
+
+    thead_cells = "".join(f"<th>{c}</th>" for c in msoa_table.columns)
+    body_rows = "".join(
+        "<tr>" + "".join(
+            f'<td class="score-cell">{row["Investment Score"]}</td>' if col == "Investment Score" else f"<td>{row[col]}</td>"
+            for col in msoa_table.columns
+        ) + "</tr>"
+        for _, row in msoa_table.iterrows()
+    )
+    st.markdown(
+        f'''<div class="table-card"><table class="styled-table">
+            <thead><tr>{thead_cells}</tr></thead>
+            <tbody>{body_rows}</tbody>
+        </table></div>''',
+        unsafe_allow_html=True,
+    )
+
+# -----------------------------
+# INVESTMENT SCORE MAP
+# -----------------------------
+st.markdown("<div class='step-label' style='margin-top:8px;'>Investment score by area</div>", unsafe_allow_html=True)
+
+map_msoas = msoa_df[
+    msoa_df["city"].str.title().isin(cities) & msoa_df["lad_name"].isin(lads)
+].copy()
+
+if msoa_geojson is None or map_msoas.empty:
+    st.info("No map data available for the selected areas.")
+else:
+    map_codes = set(map_msoas["msoa_code"])
+    filtered_geojson = {
+        "type": "FeatureCollection",
+        "features": [
+            f for f in msoa_geojson["features"]
+            if f["properties"].get("MSOA21CD") in map_codes
+        ],
+    }
+
+    visible_cities = [c for c in cities if not map_msoas[map_msoas["city"].str.title() == c].empty]
+    map_cols = st.columns(len(visible_cities)) if visible_cities else []
+
+    for col, city_name in zip(map_cols, visible_cities):
+        city_map_df = map_msoas[map_msoas["city"].str.title() == city_name]
+
+        city_codes = set(city_map_df["msoa_code"])
+        coords = [
+            (f["properties"]["LAT"], f["properties"]["LONG"])
+            for f in filtered_geojson["features"]
+            if f["properties"].get("MSOA21CD") in city_codes
+            and "LAT" in f["properties"] and "LONG" in f["properties"]
+        ]
+        center = (
+            {"lat": sum(c[0] for c in coords) / len(coords), "lon": sum(c[1] for c in coords) / len(coords)}
+            if coords else {"lat": 52.5, "lon": -1.5}
+        )
+
+        with col:
+            st.markdown(f"<p style='font-weight:600;margin-bottom:8px;'>{city_name}</p>", unsafe_allow_html=True)
+
+            fig = px.choropleth_map(
+                city_map_df,
+                geojson=filtered_geojson,
+                locations="msoa_code",
+                featureidkey="properties.MSOA21CD",
+                color="investment_score",
+                color_continuous_scale=[[0, "#E3EEEC"], [1, TEAL]],
+                hover_name="msoa_name",
+                hover_data={"msoa_code": False, "investment_score": ":.1f"},
+                labels={"investment_score": "Investment Score"},
+                map_style="carto-positron",
+                center=center,
+                zoom=9.3,
+                opacity=0.85,
+                height=460,
+            )
+            fig.update_traces(marker_line_width=1, marker_line_color="#ffffff")
+            fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="rgba(0,0,0,0)", font_family="Inter")
+            st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
+
+# -----------------------------
 # FILTER DATA
 # -----------------------------
-city_df = lad_df[lad_df["city"].str.title() == city].copy()
+city_df = lad_df[
+    lad_df["city"].str.title().isin(cities) & lad_df["lad_name"].isin(lads)
+].copy()
 
 if "median_house_price_2025_lad" in city_df.columns:
-    city_df = city_df[city_df["median_house_price_2025_lad"] <= budget]
+    city_df = city_df[
+        city_df["median_house_price_2025_lad"].between(budget_min, budget_max)
+    ]
 
 if city_df.empty:
     best_area = None
-    st.warning("No areas match this budget. Try increasing the budget.")
 else:
     best_area = city_df.sort_values("investment_score", ascending=False).iloc[0]
 
@@ -194,8 +499,8 @@ if st.session_state.score_page == "Home":
             f"""
             <div class="card">
             <h3>Your Search</h3>
-            <p><b>City:</b> {city}</p>
-            <p><b>Budget:</b> £{budget:,}</p>
+            <p><b>Areas:</b> {", ".join(cities)}</p>
+            <p><b>Budget:</b> £{budget_min:,} – £{budget_max:,}</p>
             <p><b>Investor Type:</b> {profile}</p>
             </div>
             """,
@@ -296,7 +601,7 @@ elif st.session_state.score_page == "Score Breakdown":
 # -----------------------------
 elif st.session_state.score_page == "Compare Areas":
 
-    st.subheader(f"Compare Areas in {city}")
+    st.subheader(f"Compare Areas in {', '.join(cities)}")
 
     ranked = city_df.sort_values("investment_score", ascending=False)
 
@@ -333,8 +638,8 @@ elif st.session_state.score_page == "Recommendation":
 
         insight = generate_insight(
             area_name=best_area["lad_name"],
-            city=city,
-            budget=budget,
+            city=best_area["city"].title(),
+            budget=budget_max,
             stats={
                 "str_yield": best_area["str_gross_yield"],
                 "ltr_yield": best_area["ltr_gross_yield"],
