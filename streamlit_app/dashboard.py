@@ -385,11 +385,13 @@ elif st.session_state.page == "Risks":
 
     if best_area is None:
         st.warning("No risk data available.")
+
     else:
 
         # -----------------------------
         # Calculate Overall Risk
         # -----------------------------
+
         if best_area["saturation_score"] < 40:
             overall_risk = "🔴 High"
         elif best_area["saturation_score"] < 70:
@@ -397,19 +399,25 @@ elif st.session_state.page == "Risks":
         else:
             overall_risk = "🟢 Low"
 
+
         st.markdown(f"## Overall Risk Level: {overall_risk}")
+
 
         # -----------------------------
         # Risk Cards
         # -----------------------------
+
         col1, col2 = st.columns(2)
+
 
         with col1:
 
+            # Market Saturation Risk
             if best_area["total_listings"] > city_df["total_listings"].median():
-                competition = "High"
+                competition = "High 🔴"
             else:
-                competition = "Low"
+                competition = "Low 🟢"
+
 
             st.info(f"""
 ### 🏠 Market Saturation
@@ -418,57 +426,268 @@ elif st.session_state.page == "Risks":
 
 There are **{int(best_area['total_listings'])} Airbnb listings** in this area.
 
-Higher numbers indicate greater competition between hosts.
+Higher listing numbers indicate increased competition between hosts,
+which may reduce occupancy rates and pricing power.
 """)
 
-            st.info(f"""
+
+            # Property Price Risk
+            st.info("""
 ### 💷 Property Price
 
-**Risk Level:** Medium
+**Risk Level:** Medium 🟡
 
-Higher property prices require a larger upfront investment and may increase the time needed to recover costs.
+Higher property prices require greater upfront investment.
+
+Expensive areas may provide strong long-term appreciation,
+but they can increase the time required to recover the initial investment.
 """)
+
 
         with col2:
 
+            # Occupancy Risk
             occupancy = 365 - best_area["avg_availability_365"]
 
+
             if occupancy > 250:
-                occupancy_risk = "Low"
+                occupancy_risk = "Low 🟢"
             elif occupancy > 180:
-                occupancy_risk = "Medium"
+                occupancy_risk = "Medium 🟡"
             else:
-                occupancy_risk = "High"
+                occupancy_risk = "High 🔴"
+
 
             st.info(f"""
 ### 📅 Occupancy
 
 **Risk Level:** {occupancy_risk}
 
-Estimated booked nights per year: **{int(occupancy)}**
+Estimated booked nights per year:
+
+**{int(occupancy)} nights**
+
+Lower occupancy can significantly impact Airbnb profitability.
 """)
 
+
+            # Regulation Risk
             st.info("""
 ### ⚖️ Regulation
 
-**Risk Level:** Medium
+**Risk Level:** Medium 🟡
 
-Future government or local council regulations may affect short-term rental activity.
+Short-term rental regulations may change over time.
+
+Investors should consider:
+- Local council licensing rules
+- Planning restrictions
+- Future Airbnb policy changes
 """)
+
 
         st.markdown("---")
 
+
+        # -----------------------------
+        # Risk Summary
+        # -----------------------------
+
         st.subheader("Risk Summary")
 
+
         st.markdown(f"""
-Although **{best_area['lad_name']}** has the highest investment score,
-investors should also consider:
+Although **{best_area['lad_name']}** achieved the highest investment score,
+investors should consider the following risks:
 
 - Competition from nearby Airbnb properties
-- Upfront property purchase costs
-- Seasonal changes in occupancy
-- Possible future changes to Airbnb regulations
+- High upfront property costs
+- Seasonal changes affecting occupancy
+- Changes in short-term rental regulations
 
-Overall, **{best_area['lad_name']}** offers strong investment potential, but these risks should be considered before making a purchase.
+Overall, **{best_area['lad_name']}** offers strong investment potential,
+but returns depend on maintaining good occupancy and managing costs effectively.
+""")
+
+
+        st.markdown("---")
+
+
+        # -----------------------------
+        # Additional Investor Information
+        # -----------------------------
+
+        st.subheader("Additional Risk Information")
+
+
+        # AI Policy Section
+        with st.expander("🤖 AI Use & Data Policy"):
+
+            st.write("""
+## How AI insights are generated
+
+AI is used to help analyse properties, compare investment strategies,
+and present investment insights clearly.
+
+However, AI does not freely browse the internet or create unsupported facts.
+
+The AI only uses:
+
+- Property data provided by the user
+- Market datasets loaded into the platform
+- Defined rules, assumptions and investment models
+
+
+## Reducing AI Hallucinations
+
+To improve reliability:
+
+- AI is restricted to structured and verified datasets
+- Calculations are based on predefined formulas
+- AI focuses on explaining trends rather than inventing facts
+- Uncertainty is highlighted instead of guessed
+
+
+## Investor Control
+
+AI is a supporting tool, not a decision maker.
+
+Investors remain responsible for:
+- The data they provide
+- The assumptions they choose
+- Their final investment decisions
+""")
+
+
+        # Airbnb vs Renting Section
+        with st.expander("🏠 Airbnb vs Long-Term Renting Risks"):
+
+            st.write("""
+## Airbnb Investment Risks
+
+
+### ⚖️ Laws & Regulations
+
+Airbnb investments may be affected by:
+
+- Short-term rental licensing requirements
+- The London 90-day rule for entire-home listings
+- Planning permission restrictions
+- Fire safety requirements
+- Gas and electrical safety checks
+- Insurance requirements
+
+
+### 💰 Startup Costs
+
+Airbnb usually requires higher initial spending:
+
+- Furniture and property styling
+- Kitchen equipment
+- Smart locks/key systems
+- Professional photography
+- Safety equipment
+- Listing setup
+
+
+### 🔧 Maintenance Costs
+
+Airbnb properties often have higher ongoing costs:
+
+- Cleaning between guests
+- Linen and consumable replacement
+- Increased furniture wear
+- More frequent repairs
+- Higher insurance costs
+
+
+
+---
+
+
+# Long-Term Renting Risks
+
+
+### ⚖️ Laws & Regulations
+
+Long-term rentals require:
+
+- Legal tenancy agreements
+- Deposit protection
+- Right-to-rent checks
+- Gas safety certificates
+- Electrical safety certificates
+- EPC compliance
+
+
+### 💰 Startup Costs
+
+Typically lower than Airbnb:
+
+- Basic property preparation
+- Safety certificates
+- Agent fees (if used)
+- Initial cleaning
+
+
+### 🔧 Maintenance Costs
+
+Common costs include:
+
+- Repairs
+- Appliance replacement
+- Landlord insurance
+- Void periods
+- Property refresh costs
+
+
+
+---
+
+
+## Investment Comparison
+
+
+### Airbnb
+
+✅ Potentially higher returns
+
+❌ More regulations
+
+❌ Higher operating costs
+
+❌ Requires more active management
+
+
+### Long-Term Renting
+
+✅ Stable predictable income
+
+✅ Lower maintenance workload
+
+✅ Simpler management
+
+❌ Usually lower maximum returns
+""")
+
+
+        st.markdown("---")
+
+
+        # Final takeaway
+        st.success(f"""
+### Final Investor Takeaway
+
+**{best_area['lad_name']}** provides attractive investment potential,
+but investors should balance expected returns against:
+
+- Market competition
+- Regulatory uncertainty
+- Operating costs
+- Management requirements
+
+A strong investment decision requires considering both
+financial performance and potential risks.
+""")
 """)
         
