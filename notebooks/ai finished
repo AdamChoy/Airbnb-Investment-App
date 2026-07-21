@@ -1,0 +1,142 @@
+# ============================================================
+# 1. IMPORTS
+# ============================================================
+from pyspark.sql.functions import col
+from openai import OpenAI
+
+# ============================================================
+# 2. OPENAI CLIENT
+# ============================================================
+client = OpenAI(api_key="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")
+
+
+# ============================================================
+# 3. LOAD DATA FROM UNITY CATALOG (CORRECT PATHS)
+# ============================================================
+investment_scores = spark.table("airbnb_app.export.lad_investment_summary")
+lad_agg = spark.table("airbnb_app.export.lad_review_sentiment")
+msoa_scores = spark.table("airbnb_app.export.msoa_investment_summary")
+msoa_agg = spark.table("airbnb_app.export.msoa_review_sentiment")
+
+display(investment_scores)
+display(lad_agg)
+
+
+# ============================================================
+# 4. AI FUNCTIONS
+# ============================================================
+def summarise_reviews_with_llm(area_name, reviews):
+    prompt = f"""
+    Summarise Airbnb guest reviews for: {area_name}.
+    Only use the provided reviews. Do NOT invent facts.
+
+    Reviews:
+    {reviews}
+
+    Extract:
+    - Positive themes
+    - Negative themes
+    - Sentiment (positive / mixed / negative)
+    - 3–5 key insights
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2
+    )
+    return response.choices[0].message.content
+
+
+def explain_investment_score(area_metrics, persona):
+    prompt = f"""
+    Explain the investment score using ONLY the metrics below.
+
+    Area metrics:
+    {area_metrics}
+
+    Persona:
+    {persona}
+
+    Explain:
+    - Why the score is high or low
+    - Which metrics matter most for this persona
+    - Any risks or weaknesses
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2
+    )
+    return response.choices[0].message.content
+
+
+def recommend_area(area_metrics, review_summary, persona):
+    prompt = f"""
+    Provide a final investment recommendation.
+
+    Area metrics:
+    {area_metrics}
+
+    Review summary:
+    {review_summary}
+
+    Persona:
+    {persona}
+
+    Produce:
+    - Fit (good / moderate / poor)
+    - Why it suits the persona
+    - How reviews support or weaken the score
+    - 3–5 bullet points
+    """
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.2
+    )
+    return response.choices[0].message.content
+
+
+# ============================================================
+# 5. PERSONA DEFINITIONS
+# ============================================================
+def get_persona(persona_type: str):
+    if persona_type == "yield":
+        return {"type": "yield", "weight_revenue": 0.5, "weight_occupancy": 0.3, "weight_risk": 0.2}
+    elif persona_type == "growth":
+        return {"type": "growth", "weight_revenue": 0.4, "weight_occupancy": 0.3, "weight_risk": 0.3}
+    else:
+        return {"type": "balanced", "weight_revenue": 0.33, "weight_occupancy": 0.33, "weight_risk": 0.34}
+
+
+# ================================================
+# RUN AI FOR SELECTED LAD
+# ================================================
+
+# 1. Get investment metrics
+row = investment_scores.filter(col("lad_name") == selected_area).first()
+if row is None:
+    raise ValueError(f"No investment score found for LAD: {selected_area}")
+area_metrics = row.asDict()
+
+# 2. Get reviews
+reviews_rows = lad_agg.filter(col("lad_name") == selected_area).select("sample_reviews").collect()
+reviews = [r["sample_reviews"] for r in reviews_rows]
+
+# 3. Run AI
+review_summary = summarise_reviews_with_llm(selected_area, reviews)
+score_explanation = explain_investment_score(area_metrics, persona)
+recommendation = recommend_area(area_metrics, review_summary, persona)
+
+# 4. Output
+print("=== Review Summary ===")
+print(review_summary)
+
+print("\n=== Investment Score Explanation ===")
+print(score_explanation)
+
+print("\n=== Final Recommendation ===")
+print(recommendation)
