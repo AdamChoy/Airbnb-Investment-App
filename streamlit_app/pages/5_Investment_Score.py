@@ -23,7 +23,7 @@ msoa_df = pd.read_csv(os.path.join(DATA_DIR, "msoa_investment_summary.csv"))
 
 @st.cache_data
 def load_msoa_geojson():
-    path = os.path.join(DATA_DIR, "msoa_boundaries.geojson")
+    path = os.path.join(DATA_DIR, "msoa_boundaries_filtered.geojson")
     if not os.path.exists(path):
         return None
     with open(path, encoding="utf-8") as f:
@@ -166,15 +166,6 @@ inject_css(extra_css=f"""
 }}
 """)
 render_navbar(active="Score")
-
-st.markdown("""
-<style>
-[data-testid="stMainBlockContainer"], .block-container {
-    padding-left: 64px !important;
-    padding-right: 64px !important;
-}
-</style>
-""", unsafe_allow_html=True)
 
 # -----------------------------
 # SCORING

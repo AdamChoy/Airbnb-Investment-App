@@ -99,6 +99,7 @@ NAV_LINKS = [
     ("/Yield_Analysis", "Yields"),
     ("/Sentiment", "Sentiment"),
     ("/Investment_Score", "Score"),
+    ("/Home_Valuation", "Valuation"),
     ("/Data_Dictionary", "Data"),
     ("/How_It_Works", "How it works"),
 ]
@@ -115,6 +116,16 @@ def render_navbar(active=None):
         f'<li><a href="{href}" target="_self"{" style=\'opacity:1;font-weight:700;\'" if label == active else ""}>{label}</a></li>'
         for href, label in NAV_LINKS
     )
+    # On the Score page itself, the navbar CTA would just link back to the
+    # page you're already on, duplicating the in-page "Analyse Investment"
+    # button that actually does something (jumps to the Dashboard tab).
+    # An indented blank line here would satisfy Markdown's 4-space code-block
+    # rule and swallow the rest of the navbar HTML into a <pre> block — so an
+    # HTML comment stands in for "no CTA" instead of an empty string.
+    cta_html = (
+        '<a href="/Investment_Score" target="_self" class="nav-cta-btn">Analyse Investment</a>'
+        if active != "Score" else "<!-- no CTA on the Score page -->"
+    )
 
     st.markdown(f"""
     <style>
@@ -125,7 +136,10 @@ def render_navbar(active=None):
     [data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"],
     .block-container {{
-        padding: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        padding-left: 32px !important;
+        padding-right: 32px !important;
         margin-top: 0 !important;
         max-width: 100% !important;
     }}
@@ -139,19 +153,11 @@ def render_navbar(active=None):
         align-items: center;
         justify-content: space-between;
         padding: 4px 48px;
+        margin: 0 -32px;
         background: var(--bg, {t['bg']});
         position: sticky;
         top: 0;
         z-index: 100;
-    }}
-    .navbar-divider {{
-        height: 1.5px;
-        margin: 0 32px;
-        background: {t['text_muted']};
-        opacity: 0.4;
-        position: sticky;
-        top: 66px;
-        z-index: 99;
     }}
     .navbar-left {{
         display: flex;
@@ -257,7 +263,7 @@ def render_navbar(active=None):
             <ul class="nav-links">{links_html}</ul>
         </div>
         <div class="navbar-right">
-            <a href="/Investment_Score" target="_self" class="nav-cta-btn">Analyse Investment</a>
+            {cta_html}
             <a href="#" onclick="return false;" class="settings-btn" title="Settings" aria-label="Settings">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3"/>
@@ -266,7 +272,6 @@ def render_navbar(active=None):
             </a>
         </div>
     </div>
-    <div class="navbar-divider"></div>
     """, unsafe_allow_html=True)
 
 

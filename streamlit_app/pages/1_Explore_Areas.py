@@ -34,7 +34,6 @@ render_stripes()
 
 # ── Filters ───────────────────────────────────────────────────────────────────
 with st.container():
-    st.markdown("<div class='filter-card'>", unsafe_allow_html=True)
     f1, f2, f3, f4, f5 = st.columns(5)
 
     with f1:
@@ -49,7 +48,8 @@ with st.container():
         city = st.selectbox("City", cities, key="global_city_filter")
 
     with f2:
-        max_price = int(msoa_df["median_house_price_2025"].dropna().max())
+        price_max_series = msoa_df["median_house_price_2025"].dropna()
+        max_price = int(price_max_series.max()) if not price_max_series.empty else 1_000_000
         default_price = min(st.session_state.get("global_budget", max_price), max_price)
         price_range = st.slider("Max House Price (£)", 0, max_price, default_price, step=25000,
                                 format="£%d")
@@ -67,8 +67,6 @@ with st.container():
         else:
             st.caption("Sentiment data not loaded")
             min_sentiment = -1.0
-
-    st.markdown("</div>", unsafe_allow_html=True)
 
 # ── Apply filters ──────────────────────────────────────────────────────────────
 filtered = msoa_df.copy()

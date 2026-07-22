@@ -211,7 +211,7 @@ html, body,
     position: fixed;
     top: 46px;
     right: 48px;
-    z-index: 1000;
+    z-index: 1200;
     background: var(--card-bg);
     padding: 14px 18px;
     border-radius: 12px;
@@ -322,15 +322,6 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     top: 0;
     z-index: 1101;
 }}
-.navbar-divider {{
-    height: 1.5px;
-    margin: 0 32px;
-    background: var(--text-muted);
-    opacity: 0.4;
-    position: sticky;
-    top: 66px;
-    z-index: 1100;
-}}
 .navbar-left {{
     display: flex;
     align-items: center;
@@ -398,7 +389,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     border-radius: 0;
     overflow: hidden;
     position: relative;
-    min-height: 564px;
+    min-height: 572px;
     display: flex;
     align-items: flex-end;
 }}
@@ -648,15 +639,13 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
             <li><a href="/Yield_Analysis" target="_self">Yields</a></li>
             <li><a href="/Sentiment" target="_self">Sentiment</a></li>
             <li><a href="/Investment_Score" target="_self">Score</a></li>
+            <li><a href="/Home_Valuation" target="_self">Valuation</a></li>
             <li><a href="/Data_Dictionary" target="_self">Data</a></li>
             <li><a href="/How_It_Works" target="_self">How It Works</a></li>
             <li><a href="#section-footer" target="_self">About Us</a></li>
         </ul>
     </div>
     <div class="navbar-right">
-        <a href="/Investment_Score" target="_self" style="background:var(--text);color:var(--bg);padding:10px 24px;
-            border-radius:8px;font-size:0.875rem;font-weight:500;text-decoration:none;line-height:1.2;
-            display:inline-flex;align-items:center;margin-top:auto;margin-bottom:auto;font-family:'Inter',sans-serif;">Analyse Investment</a>
         <a href="#" onclick="return false;" class="settings-btn" title="Settings" aria-label="Settings">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"/>
@@ -665,7 +654,6 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
         </a>
     </div>
 </div>
-<div class="navbar-divider"></div>
 
 <!-- ═══ HERO CARD ═══ -->
 <div class="hero-card" id="hero-visual">
@@ -729,7 +717,7 @@ components.html("""
 if lad_geojson:
     map_df = lad_df[lad_df["city"].isin(["london", "bristol", "manchester"])].copy()
     map_df["City"] = map_df["city"].str.title()
-    map_df["STR Gross Yield (%)"] = (map_df["str_gross_yield"] * 100).round(2)
+    map_df["Airbnb Listings"] = map_df["total_listings"]
 
     st.markdown("""
     <div id="section-map" class="content-section" style="padding-bottom:0;">
@@ -742,14 +730,14 @@ if lad_geojson:
         geojson=lad_geojson,
         locations="lad_code",
         featureidkey="properties.lad_code",
-        color="STR Gross Yield (%)",
-        color_continuous_scale=[[0, "#E3EEEC"], [1, "#0D9488"]],
+        color="Airbnb Listings",
+        color_continuous_scale=[[0, "#9CC9C2"], [1, "#0D9488"]],
         hover_name="lad_name",
-        hover_data={"City": True, "lad_code": False, "STR Gross Yield (%)": True},
+        hover_data={"City": True, "lad_code": False, "Airbnb Listings": True},
         map_style="carto-positron",
         zoom=5.4,
         center={"lat": 53.4, "lon": -1.9},
-        opacity=0.85,
+        opacity=1.0,
         height=520,
     )
     map_fig.update_traces(marker_line_width=1, marker_line_color="#ffffff")
@@ -757,13 +745,81 @@ if lad_geojson:
         margin=dict(l=0, r=0, t=0, b=0),
         paper_bgcolor="rgba(0,0,0,0)",
         font_family="Inter",
+        font_color="#1a1a1a",
+        coloraxis_colorbar=dict(title_font_color="#1a1a1a", tickfont_color="#1a1a1a"),
     )
     st.markdown('<div class="content-section" style="padding-top:0;">', unsafe_allow_html=True)
-    map_col_l, map_col_mid, map_col_r = st.columns([1, 10.5, 1])
+    map_col_l, map_col_mid, map_col_r = st.columns([1, 20, 1])
     with map_col_mid:
         st.plotly_chart(map_fig, use_container_width=True, config={"scrollZoom": False})
     st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:48px;"></div>', unsafe_allow_html=True)
 
+# ── Yields & growth preview charts ───────────────────────────────────────────
+NAVY = "#1B4F72"
+GREEN = "#10c87a"
+CITY_COLORS = {"London": NAVY, "Manchester": TEAL, "Bristol": GREEN}
+
+city_agg = (
+    msoa_df[msoa_df["city"].isin(["london", "manchester", "bristol"])]
+    .groupby("city")
+    .agg(
+        str_yield=("str_gross_yield", "mean"),
+        ltr_yield=("ltr_gross_yield", "mean"),
+        price_2015=("median_house_price_2015", "mean"),
+        price_2025=("median_house_price_2025", "mean"),
+    )
+    .reset_index()
+)
+city_agg["City"] = city_agg["city"].str.title()
+
+bar_df = city_agg.melt(
+    id_vars="City", value_vars=["str_yield", "ltr_yield"],
+    var_name="Type", value_name="Yield",
+)
+bar_df["Type"] = bar_df["Type"].map({"str_yield": "Short-Term Rental", "ltr_yield": "Long-Term Rental"})
+bar_df["Yield"] = (bar_df["Yield"] * 100).round(2)
+
+bar_fig = px.bar(
+    bar_df, x="City", y="Yield", color="Type", barmode="group",
+    color_discrete_map={"Short-Term Rental": TEAL, "Long-Term Rental": NAVY},
+    labels={"Yield": "Gross Yield (%)"},
+    template="plotly_white",
+)
+bar_fig.update_layout(
+    height=360, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+    font_family="Inter", legend_title_text="", margin=dict(t=20),
+)
+
+line_rows = []
+for _, r in city_agg.iterrows():
+    line_rows.append({"City": r["City"], "Year": 2015, "Price": r["price_2015"]})
+    line_rows.append({"City": r["City"], "Year": 2025, "Price": r["price_2025"]})
+line_df = pd.DataFrame(line_rows)
+
+line_fig = px.line(
+    line_df, x="Year", y="Price", color="City", markers=True,
+    color_discrete_map=CITY_COLORS,
+    labels={"Price": "Median House Price (£)"},
+    template="plotly_white",
+)
+line_fig.update_xaxes(tickvals=[2015, 2025])
+line_fig.update_layout(
+    height=360, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+    font_family="Inter", legend_title_text="", margin=dict(t=20),
+)
+
+st.markdown(
+    "<div class='content-section'><div class='section-title'>Yields &amp; Growth at a Glance</div></div>",
+    unsafe_allow_html=True,
+)
+chart_col1, chart_col2 = st.columns(2)
+with chart_col1:
+    st.markdown("<p style='font-weight:600;margin-bottom:8px;'>STR vs LTR Gross Yield by City</p>", unsafe_allow_html=True)
+    st.plotly_chart(bar_fig, use_container_width=True, config={"displayModeBar": False})
+with chart_col2:
+    st.markdown("<p style='font-weight:600;margin-bottom:8px;'>Median House Price Growth, 2015–25</p>", unsafe_allow_html=True)
+    st.plotly_chart(line_fig, use_container_width=True, config={"displayModeBar": False})
 
 # ── Combined footer ───────────────────────────────────────────────────────────
 st.markdown(f"""
@@ -784,38 +840,33 @@ st.markdown(f"""
         <div class="footer-col-title">Explore</div>
         <ul class="footer-links">
             <li><a href="#section-map" target="_self">Coverage Map</a></li>
-            <li><a href="/Explore_Areas" target="_self">City Explorer</a></li>
-            <li><a href="/Explore_Areas" target="_self">MSOA Search</a></li>
+            <li><a href="/Explore_Areas" target="_self">Explore Areas</a></li>
         </ul>
     </div>
     <div>
         <div class="footer-col-title">Analysis</div>
         <ul class="footer-links">
-            <li><a href="/Yield_Analysis" target="_self">STR Yields</a></li>
-            <li><a href="/Yield_Analysis" target="_self">LTR Yields</a></li>
-            <li><a href="/Yield_Analysis" target="_self">Yield Delta</a></li>
+            <li><a href="/Yield_Analysis" target="_self">Yield Analysis</a></li>
+            <li><a href="/Investment_Score" target="_self">Investment Score</a></li>
+            <li><a href="/Home_Valuation" target="_self">Home Valuation</a></li>
         </ul>
     </div>
     <div>
         <div class="footer-col-title">Insights</div>
         <ul class="footer-links">
             <li><a href="/Sentiment" target="_self">Sentiment</a></li>
-            <li><a href="/Yield_Analysis" target="_self">House Prices</a></li>
-            <li><a href="/Explore_Areas" target="_self">Rail Access</a></li>
         </ul>
     </div>
     <div>
         <div class="footer-col-title">Data</div>
         <ul class="footer-links">
             <li><a href="/Data_Dictionary" target="_self">Data Dictionary</a></li>
-            <li><a href="/Data_Dictionary" target="_self">Pipeline Docs</a></li>
-            <li><a href="/Data_Dictionary" target="_self">Assumptions</a></li>
         </ul>
     </div>
     <div>
         <div class="footer-col-title">About</div>
         <ul class="footer-links">
-            <li><a href="/Data_Dictionary" target="_self">Methodology</a></li>
+            <li><a href="/How_It_Works" target="_self">How It Works</a></li>
             <li><a href="https://github.com/AdamChoy/Airbnb-Investment-App" target="_blank">GitHub</a></li>
         </ul>
     </div>
@@ -827,9 +878,6 @@ st.markdown(f"""
         <div style="font-size:0.85rem;color:var(--text);font-weight:500;">
             InvestStay &copy; 2026
         </div>
-        <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px;">
-            Built at Rockborne &middot; Databricks Unity Catalog
-        </div>
         <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:8px;">
             <span style="font-size:0.75rem;color:var(--text-muted);">Built by</span>
             {team_links}
@@ -839,8 +887,7 @@ st.markdown(f"""
         {logo_img}
     </div>
     <div style="font-size:0.78rem;color:var(--text-muted);text-align:right;line-height:1.8;justify-self:end;">
-        Inside Airbnb &middot; Land Registry &middot; ONS<br>
-        NHS Digital &middot; OS OpenData &middot; Databricks
+        Data sourced from Inside Airbnb &middot; Land Registry &middot; ONS &middot; OS OpenData
     </div>
 </div>
 """, unsafe_allow_html=True)

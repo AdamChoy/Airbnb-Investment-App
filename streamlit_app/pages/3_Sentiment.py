@@ -112,8 +112,9 @@ try:
                        font=dict(family="Inter, Segoe UI, sans-serif"))
     st.plotly_chart(fig2, use_container_width=True)
     st.caption("Bubble size = number of reviews. Shows whether high-yield areas also have high guest satisfaction.")
-except Exception:
-    pass
+except Exception as e:
+    print(f"[Sentiment page] Sentiment vs STR Yield chart failed to build: {e}")
+    st.info("Sentiment vs STR Yield chart is unavailable right now.")
 
 # ── Sample reviews ────────────────────────────────────────────────────────────
 if "sample_reviews" in df.columns:
