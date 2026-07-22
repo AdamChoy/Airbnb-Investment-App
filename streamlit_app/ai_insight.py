@@ -81,3 +81,52 @@ just the sentences."""
     except Exception:
         # Network/quota/API errors: never break the demo, just fall back.
         return _static_fallback(area_name, city, budget, stats)
+
+
+@st.cache_data(show_spinner=False)
+def summarise_reviews(msoa_name: str, reviews: tuple[str, ...]) -> str | None:
+    """Return a 2-3 sentence summary of `reviews`, grounded only in the
+    review text given (no invented claims about the area).
+
+    Unlike generate_insight(), there's no meaningful non-AI fallback for
+    summarising free text — if no API key is configured or the call fails,
+    this returns None, and callers should just show the raw review
+    excerpts instead (which is what happens today with no AI at all).
+    """
+    reviews = [r.strip() for r in reviews if r and r.strip()]
+    if not reviews:
+        return None
+
+    api_key = _get_api_key()
+    if not api_key:
+        return None
+
+    try:
+        import anthropic
+    except ImportError:
+        return None
+
+    review_block = "\n".join(f"- {r}" for r in reviews)
+    prompt = f"""You are summarising guest reviews for a property investment app.
+Using ONLY the reviews below — do not invent details the reviews don't
+mention — write a 2-3 sentence summary of what guests say about staying
+in {msoa_name}. Focus on recurring themes (e.g. location, cleanliness,
+host responsiveness, noise, value). If the reviews disagree, say so
+briefly rather than picking one side.
+
+Reviews:
+{review_block}
+
+No headers, no bullet points, just the summary sentences."""
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=180,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return response.content[0].text.strip()
+    except Exception:
+        # Network/quota/API errors: never break the demo, just fall back.
+        return None

@@ -6,6 +6,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from theme import TEAL, inject_css, render_navbar, render_stripes
+from ai_insight import summarise_reviews
 
 st.set_page_config(page_title="Sentiment · InvestStay", page_icon="💬", layout="wide", initial_sidebar_state="collapsed")
 
@@ -123,7 +124,18 @@ if "sample_reviews" in df.columns:
     if area_options:
         selected_area = st.selectbox("Select MSOA", sorted(area_options))
         row = df[df["msoa_name"] == selected_area].iloc[0]
-        reviews = str(row["sample_reviews"]).split(" | ")
+        reviews = [r.strip() for r in str(row["sample_reviews"]).split(" | ") if r.strip()]
+
+        summary = summarise_reviews(selected_area, tuple(reviews))
+        if summary:
+            st.markdown(
+                f"""<div class="card" style="margin-bottom:16px;">
+                <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;
+                letter-spacing:0.1em;color:{TEAL};margin-bottom:8px;">AI Summary</p>
+                <p style="margin:0;">{summary}</p>
+                </div>""",
+                unsafe_allow_html=True,
+            )
+
         for review in reviews:
-            if review.strip():
-                st.markdown(f"<div class='review-card'>{review.strip()}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='review-card'>{review}</div>", unsafe_allow_html=True)
