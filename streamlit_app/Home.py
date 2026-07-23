@@ -5,7 +5,8 @@ import json
 import os
 import base64
 import plotly.express as px
-from theme import TEAL
+from theme import TEAL, style_chart, navbar_shared_css, navbar_links_html, render_settings_toggle_script
+from scoring import PROFILES, DEFAULT_PROFILE, add_investment_score
 
 st.set_page_config(
     page_title="InvestStay",
@@ -15,23 +16,9 @@ st.set_page_config(
 )
 
 
-# ── Settings menu (dark mode + currency) ────────────────────────────────────────
+# ── Settings menu (dark mode) ────────────────────────────────────────────────
 with st.container(key="settings_menu"):
     dark_mode = st.toggle("🌙 Dark mode", key="dark_mode", label_visibility="visible")
-    st.markdown('<div class="settings-divider"></div>', unsafe_allow_html=True)
-    currency = st.radio(
-        "Currency", ["£ GBP", "$ USD"], key="currency",
-        horizontal=True, label_visibility="collapsed",
-    )
-
-GBP_TO_USD = 1.27  # static conversion rate, not live-fetched
-CURRENCY_SYMBOL = "£" if currency == "£ GBP" else "$"
-
-def fmt_money(gbp_amount):
-    if pd.isna(gbp_amount):
-        return "N/A"
-    amount = gbp_amount if currency == "£ GBP" else gbp_amount * GBP_TO_USD
-    return f"{CURRENCY_SYMBOL}{amount:,.0f}"
 
 if dark_mode:
     THEME = dict(
@@ -255,6 +242,7 @@ html, body,
     gap: 10px;
 }}
 body:has(.settings-btn:hover) .st-key-settings_menu,
+body.settings-open .st-key-settings_menu,
 .st-key-settings_menu:hover {{
     opacity: 1;
     visibility: visible;
@@ -265,14 +253,6 @@ body:has(.settings-btn:hover) .st-key-settings_menu,
     color: var(--text) !important;
     font-family: 'Inter', sans-serif;
     font-size: 0.85rem !important;
-}}
-.st-key-settings_menu [data-testid="stRadio"] > div {{
-    gap: 6px;
-}}
-.settings-divider {{
-    height: 1px;
-    background: var(--border);
-    margin: 2px 0 6px;
 }}
 .st-key-settings_menu [data-testid="stToggle"] [role="switch"][aria-checked="true"],
 .st-key-settings_menu [data-testid="stToggle"] div[data-baseweb="toggle"][aria-checked="true"] {{
@@ -351,65 +331,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     top: 0;
     z-index: 1101;
 }}
-.navbar-left {{
-    display: flex;
-    align-items: center;
-    height: 58px;
-    gap: 28px;
-}}
-.navbar-logo-link {{
-    display: inline-flex;
-    margin-top: auto;
-    margin-bottom: auto;
-    transition: opacity 0.2s ease, transform 0.2s ease;
-}}
-.navbar-logo-link:hover {{
-    opacity: 0.75;
-    transform: scale(1.04);
-}}
-.nav-links {{
-    display: flex;
-    align-items: center;
-    margin-top: auto;
-    margin-bottom: auto;
-    gap: 22px;
-    list-style: none;
-    transform: translateX(-10px);
-}}
-.nav-links li {{
-    display: flex;
-    align-items: center;
-}}
-.nav-links a {{
-    color: var(--text);
-    text-decoration: none;
-    font-size: 1.15rem;
-    font-weight: 500;
-    line-height: 1;
-    transition: opacity 0.2s;
-}}
-.nav-links a:hover {{ opacity: 0.6; }}
-.navbar-right {{
-    display: flex;
-    align-items: center;
-    height: 58px;
-    gap: 14px;
-}}
-.settings-btn {{
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    margin-top: auto;
-    margin-bottom: auto;
-    border-radius: 50%;
-    color: var(--text);
-    background: var(--card-alt-bg);
-    transition: transform 0.15s ease, background 0.15s ease;
-}}
-.settings-btn svg {{ width: 18px; height: 18px; }}
-.settings-btn:hover {{ transform: rotate(45deg); background: var(--card-alt-hover); }}
+{navbar_shared_css(THEME)}
 
 /* ── Hero card ── */
 .hero-card {{
@@ -713,19 +635,10 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
 <div class="navbar">
     <div class="navbar-left">
         <a href="/" target="_self" class="navbar-logo-link">{navbar_logo_img if navbar_logo_img else '<span style="font-size:1.4rem;font-weight:900;letter-spacing:-0.05em;">IS</span>'}</a>
-        <ul class="nav-links">
-            <li><a href="/Explore_Areas" target="_self">Explore</a></li>
-            <li><a href="/Yield_Analysis" target="_self">Yields</a></li>
-            <li><a href="/Sentiment" target="_self">Sentiment</a></li>
-            <li><a href="/Property_Analysis" target="_self">Score</a></li>
-            <li><a href="/Home_Valuation" target="_self">Valuation</a></li>
-            <li><a href="/Data_Dictionary" target="_self">Data</a></li>
-            <li><a href="/How_It_Works" target="_self">How It Works</a></li>
-            <li><a href="/About_Us" target="_self">About Us</a></li>
-        </ul>
+        <ul class="nav-links">{navbar_links_html()}</ul>
     </div>
     <div class="navbar-right">
-        <a href="#" onclick="return false;" class="settings-btn" title="Settings" aria-label="Settings">
+        <a href="#" onclick="return false;" class="settings-btn" title="Settings" aria-label="Settings" aria-haspopup="true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="3"/>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -765,6 +678,8 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
 </div>
 """, unsafe_allow_html=True)
 
+render_settings_toggle_script()
+
 components.html("""
 <script>
 (function() {
@@ -798,21 +713,13 @@ if lad_geojson:
     map_df["City"] = map_df["city"].str.title()
     map_df["No. of Airbnb Listings"] = map_df["total_listings"]
 
-    # Same lightweight scoring formula used on the Investment Score page,
-    # so the map tooltip can show a real (not fabricated) investment score.
-    def _normalise(series):
-        if series.max() == series.min():
-            return series * 0
-        return ((series - series.min()) / (series.max() - series.min())) * 100
-
-    _revenue_score = _normalise(map_df["str_annual_revenue_est"])
-    _occupancy_score = _normalise(365 - map_df["avg_availability_365"])
-    _yield_score = _normalise(map_df["str_gross_yield"])
-    _saturation_score = 100 - _normalise(map_df["total_listings"])
-    map_df["Investment Score"] = (
-        0.35 * _revenue_score + 0.30 * _occupancy_score
-        + 0.25 * _yield_score + 0.10 * _saturation_score
-    ).round(1)
+    # Exactly the same scoring function (and default weights) as
+    # pages/5_Property_Analysis.py — see scoring.py. Previously this map used
+    # its own separate, differently-weighted formula, so the same LAD could
+    # show two different "Investment Score" numbers depending which page you
+    # were on. Don't reintroduce that split.
+    map_df = add_investment_score(map_df, PROFILES[DEFAULT_PROFILE]["weights"])
+    map_df["Investment Score"] = map_df["investment_score"]
     map_df["Investment Rank"] = map_df["Investment Score"].rank(ascending=False, method="min").astype(int)
     map_df["Estimated STR Revenue"] = map_df["str_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
     map_df["Estimated LTR Revenue"] = map_df["ltr_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
@@ -905,8 +812,9 @@ bar_fig = px.bar(
 )
 bar_fig.update_layout(
     height=360, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-    font_family="Inter", legend_title_text="", margin=dict(t=20),
+    legend_title_text="", margin=dict(t=20),
 )
+style_chart(bar_fig)
 
 line_rows = []
 for _, r in city_agg.iterrows():
@@ -923,8 +831,9 @@ line_fig = px.line(
 line_fig.update_xaxes(tickvals=[2015, 2025])
 line_fig.update_layout(
     height=360, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-    font_family="Inter", legend_title_text="", margin=dict(t=20),
+    legend_title_text="", margin=dict(t=20),
 )
+style_chart(line_fig)
 
 st.markdown(
     "<div class='content-section'><div class='section-title'>Yields &amp; Growth at a Glance</div></div>",

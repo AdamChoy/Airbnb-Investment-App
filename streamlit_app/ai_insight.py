@@ -40,6 +40,7 @@ def _static_fallback(area_name, city, budget, stats):
 # TODO: remove once OPENAI_API_KEY is configured — these two constants exist
 # purely so the AI-shaped UI (Recommendation card, Sentiment "AI Summary"
 # card) can be visually tested before a real key is wired in.
+_FILLER_MARKER = "🤖 *[AI filler"
 _FILLER_INSIGHT = (
     "🤖 *[AI filler — no OPENAI_API_KEY configured yet.]* This is a placeholder "
     "investment insight standing in for the real AI-generated write-up, so the "
@@ -50,6 +51,14 @@ _FILLER_SUMMARY = (
     "review summary standing in for the real AI-generated write-up, so the "
     "layout and styling of this card can be checked before the key is added."
 )
+
+
+def is_filler(text: str) -> bool:
+    """True if `text` is one of the placeholder strings above rather than a
+    real AI response. Callers that only want to show a card for genuine AI
+    output (not a visible "not configured yet" message) should check this
+    before rendering."""
+    return bool(text) and text.startswith(_FILLER_MARKER)
 
 
 @st.cache_data(show_spinner=False)

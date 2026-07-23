@@ -5,8 +5,8 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from theme import TEAL, inject_css, render_navbar, render_stripes
-from ai_insight import summarise_reviews
+from theme import TEAL, inject_css, render_navbar, render_styled_table, style_chart
+from ai_insight import summarise_reviews, is_filler
 
 st.set_page_config(page_title="Sentiment · InvestStay", page_icon="💬", layout="wide", initial_sidebar_state="collapsed")
 
@@ -28,7 +28,6 @@ msoa_sent, lad_sent = load_data()
 
 st.markdown(f"<h2 style='color:{NAVY};font-weight:800;margin-bottom:4px;'>Guest Sentiment</h2>", unsafe_allow_html=True)
 st.markdown(f"<p style='color:{MID};margin-bottom:24px;'>VADER sentiment analysis on Airbnb reviews — English-language only, aggregated by MSOA and LAD.</p>", unsafe_allow_html=True)
-render_stripes()
 
 if msoa_sent is None:
     st.warning("Sentiment data not found. Run notebook 05 and place msoa_review_sentiment.csv and lad_review_sentiment.csv in the data/ folder.")
@@ -56,8 +55,8 @@ fig1 = px.bar(
     barmode="stack", template="plotly_white",
     labels={"city": "City", "Percentage": "% of Reviews"},
 )
-fig1.update_layout(height=360, plot_bgcolor=WHITE, paper_bgcolor=WHITE,
-                   font=dict(family="Inter, Segoe UI, sans-serif"))
+fig1.update_layout(height=360, plot_bgcolor=WHITE, paper_bgcolor=WHITE)
+style_chart(fig1)
 st.plotly_chart(fig1, use_container_width=True)
 
 # ── Top and bottom MSOAs ──────────────────────────────────────────────────────
@@ -74,7 +73,7 @@ with col1:
     top["avg_sentiment_score"] = top["avg_sentiment_score"].round(3)
     top["pct_positive"] = top["pct_positive"].round(1).astype(str) + "%"
     top.columns = ["MSOA","City","Avg Sentiment","Reviews","% Positive"]
-    st.dataframe(top.reset_index(drop=True), use_container_width=True, hide_index=True)
+    render_styled_table(top.reset_index(drop=True), highlight_cols=["Avg Sentiment"])
 
 with col2:
     st.markdown("<div class='section-header'>Lowest Rated MSOAs</div>", unsafe_allow_html=True)
@@ -87,7 +86,7 @@ with col2:
     bottom["avg_sentiment_score"] = bottom["avg_sentiment_score"].round(3)
     bottom["pct_negative"] = bottom["pct_negative"].round(1).astype(str) + "%"
     bottom.columns = ["MSOA","City","Avg Sentiment","Reviews","% Negative"]
-    st.dataframe(bottom.reset_index(drop=True), use_container_width=True, hide_index=True)
+    render_styled_table(bottom.reset_index(drop=True), highlight_cols=["Avg Sentiment"])
 
 # ── Sentiment vs Yield scatter ────────────────────────────────────────────────
 try:
@@ -109,8 +108,8 @@ try:
         labels={"avg_sentiment_score": "Avg Sentiment Score", "str_gross_yield": "STR Gross Yield"},
         template="plotly_white",
     )
-    fig2.update_layout(height=420, plot_bgcolor=WHITE, paper_bgcolor=WHITE,
-                       font=dict(family="Inter, Segoe UI, sans-serif"))
+    fig2.update_layout(height=420, plot_bgcolor=WHITE, paper_bgcolor=WHITE)
+    style_chart(fig2)
     st.plotly_chart(fig2, use_container_width=True)
     st.caption("Bubble size = number of reviews. Shows whether high-yield areas also have high guest satisfaction.")
 except Exception as e:
@@ -127,7 +126,12 @@ if "sample_reviews" in df.columns:
         reviews = [r.strip() for r in str(row["sample_reviews"]).split(" | ") if r.strip()]
 
         summary = summarise_reviews(selected_area, tuple(reviews))
-        if summary:
+        # Filler text (shown while no OPENAI_API_KEY is configured) is for
+        # visually testing this card's own layout, not something an actual
+        # user should see — a "not configured yet" message reads as broken.
+        # No key just means: show the raw reviews below, like before this
+        # feature existed.
+        if summary and not is_filler(summary):
             st.markdown(
                 f"""<div class="card" style="margin-bottom:16px;">
                 <p style="font-size:0.72rem;font-weight:700;text-transform:uppercase;

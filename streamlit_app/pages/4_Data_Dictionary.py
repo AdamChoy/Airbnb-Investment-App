@@ -1,9 +1,10 @@
 import streamlit as st
 import os
 import sys
+import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from theme import TEAL, inject_css, render_navbar, render_stripes
+from theme import TEAL, inject_css, render_navbar, render_styled_table
 
 st.set_page_config(page_title="Data Dictionary · InvestStay", page_icon="📖", layout="wide", initial_sidebar_state="collapsed")
 
@@ -13,9 +14,6 @@ render_navbar(active="Data")
 
 st.markdown(f"<h2 style='color:{NAVY};font-weight:800;margin-bottom:4px;'>Data Dictionary</h2>", unsafe_allow_html=True)
 st.markdown(f"<p style='color:{MID};margin-bottom:24px;'>Schema reference for <code>msoa_investment_summary</code> — the core export table powering this app.</p>", unsafe_allow_html=True)
-render_stripes()
-
-import pandas as pd
 
 SOURCES = [
     ("Inside Airbnb", "Listing-level Airbnb data — prices, availability, reviews, room type — scraped and published independently of Airbnb.", "Listing aggregates"),
@@ -38,7 +36,7 @@ for col, (name, desc, powers) in zip(src_cols, SOURCES):
     with col:
         st.markdown(
             f"""
-            <div style='background:{WHITE};border-radius:12px;padding:16px;height:100%;
+            <div style='background:{WHITE};border-radius:12px;padding:16px;height:100%;min-height:200px;
                  box-shadow:0 2px 8px rgba(0,0,0,0.06);'>
                 <div style='font-weight:700;color:{NAVY};font-size:0.9rem;margin-bottom:6px;'>{name}</div>
                 <div style='color:{MID};font-size:0.8rem;line-height:1.5;margin-bottom:10px;'>{desc}</div>
@@ -91,9 +89,11 @@ sections = {
 }
 
 for section, rows in sections.items():
+    st.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
     st.markdown(f"<div class='section-header'>{section}</div>", unsafe_allow_html=True)
+    st.markdown("<div style='height:16px;'></div>", unsafe_allow_html=True)
     df = pd.DataFrame(rows, columns=["Column", "Type", "Source", "Description"])
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    render_styled_table(df, max_height=1000)
 
 st.markdown(f"""
 <div style='margin-top:32px;padding:16px;background:{WHITE};border-radius:10px;

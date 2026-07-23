@@ -7,8 +7,9 @@ import plotly.express as px
 import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from theme import TEAL, get_theme, inject_css, _get_logo_b64, render_navbar
+from theme import TEAL, get_theme, inject_css, _get_logo_b64, render_navbar, render_styled_table, style_chart, render_stat_card
 from ai_insight import generate_insight
+from scoring import PROFILES, DEFAULT_PROFILE, add_investment_score
 
 st.set_page_config(page_title="Investment Score · InvestStay", layout="wide", initial_sidebar_state="collapsed")
 
@@ -20,6 +21,15 @@ ASSETS_DIR = os.path.join(os.path.dirname(__file__), "..", "assets")
 
 lad_df = pd.read_csv(os.path.join(DATA_DIR, "lad_investment_summary.csv"))
 msoa_df = pd.read_csv(os.path.join(DATA_DIR, "msoa_investment_summary.csv"))
+
+# lad_investment_summary.csv still has an Edinburgh row left over from an
+# earlier dataset, but it's not one of the 3 cities selectable anywhere in
+# this app's UI (see CITIES below) and msoa_investment_summary.csv never
+# had it in the first place. Left in, it silently skews the min-max
+# normalisation every investment_score is built from — drop it before
+# scoring so LAD- and MSOA-level scores are computed over the same
+# population of cities.
+lad_df = lad_df[lad_df["city"].isin(["london", "manchester", "bristol"])].copy()
 
 @st.cache_data
 def load_msoa_geojson():
@@ -47,131 +57,9 @@ def get_city_img_uri(city_name):
 CITIES = ["London", "Manchester", "Bristol"]
 
 # -----------------------------
-# STYLE
+# SCORING (shared with Home.py's coverage map — see scoring.py — so the
+# same LAD never shows two different "Investment Score" numbers)
 # -----------------------------
-t = get_theme()
-inject_css(extra_css=f"""
-.main-title {{ font-size: 2.25rem; font-weight: 800; }}
-.teal {{ color: {TEAL}; }}
-.score {{ font-size: 54px; font-weight: 800; color: {TEAL}; }}
-.stButton > button {{
-    background-color: {TEAL}; color: white; border: none;
-    border-radius: 12px; padding: 0.7rem 1.2rem; font-weight: 600;
-}}
-.stButton > button:hover {{ background-color: #0b7d73; color: white; }}
-.step-label {{
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: {TEAL};
-    margin-bottom: 10px;
-}}
-.profile-card-desc {{
-    font-size: 0.85rem;
-    line-height: 1.5;
-    color: {t['text_muted']};
-    margin-top: 8px;
-}}
-.table-card {{
-    background: {t['card_bg']};
-    border-radius: 16px;
-    overflow: auto;
-    max-height: 480px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-    margin-bottom: 8px;
-}}
-.styled-table {{
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem;
-    white-space: nowrap;
-}}
-.styled-table thead th {{
-    position: sticky;
-    top: 0;
-    background: {TEAL};
-    color: #fff;
-    font-size: 0.68rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 14px 20px;
-    text-align: left;
-}}
-.styled-table tbody td {{
-    padding: 12px 20px;
-    color: {t['text']};
-    border-bottom: 1px solid {t['border']};
-}}
-.styled-table tbody tr:nth-child(even) {{ background: {t['card_alt_bg']}; }}
-.styled-table tbody tr:hover {{ background: {t['card_alt_hover']}; }}
-.styled-table tbody tr:last-child td {{ border-bottom: none; }}
-.styled-table td.score-cell {{
-    color: {TEAL};
-    font-weight: 700;
-}}
-[data-testid="stPlotlyChart"] {{
-    border: 1px solid {t['border']};
-    border-radius: 16px;
-    overflow: hidden;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-}}
-""")
-render_navbar(active="Score")
-
-# -----------------------------
-# SCORING
-# -----------------------------
-def normalise(series):
-    if series.max() == series.min():
-        return series * 0
-    return ((series - series.min()) / (series.max() - series.min())) * 100
-
-def add_investment_score(df, weights):
-    df = df.copy()
-
-    df["revenue_score"] = normalise(df["str_annual_revenue_est"])
-    df["occupancy_proxy"] = 365 - df["avg_availability_365"]
-    df["occupancy_score"] = normalise(df["occupancy_proxy"])
-    df["str_yield_score"] = normalise(df["str_gross_yield"])
-    df["yield_gap_score"] = normalise(df["str_vs_ltr_yield_delta"])
-    df["saturation_score"] = 100 - normalise(df["total_listings"])
-    df["review_score"] = normalise(df["avg_review_score"])
-
-    df["investment_score"] = (
-        weights["revenue"] * df["revenue_score"]
-        + weights["occupancy"] * df["occupancy_score"]
-        + weights["str_yield"] * df["str_yield_score"]
-        + weights["yield_gap"] * df["yield_gap_score"]
-        + weights["saturation"] * df["saturation_score"]
-        + weights["review"] * df["review_score"]
-    ).round(1)
-
-    return df
-
-# -----------------------------
-# INVESTOR PROFILES (each maps to a different investment_score weighting)
-# -----------------------------
-PROFILES = {
-    "yield": {
-        "label": "Yield Maximiser",
-        "sentence": "Weights short-term rental revenue and yield most heavily, prioritising the highest possible return.",
-        "weights": {"revenue": 0.40, "occupancy": 0.15, "str_yield": 0.30, "yield_gap": 0.05, "saturation": 0.05, "review": 0.05},
-    },
-    "occupancy": {
-        "label": "Occupancy Optimiser",
-        "sentence": "Weights booked-night occupancy most heavily, favouring consistently high demand over headline yield.",
-        "weights": {"revenue": 0.15, "occupancy": 0.45, "str_yield": 0.15, "yield_gap": 0.05, "saturation": 0.10, "review": 0.10},
-    },
-    "quality": {
-        "label": "Quality Host",
-        "sentence": "Weights guest review scores alongside yield, favouring areas where hosts maintain strong guest satisfaction.",
-        "weights": {"revenue": 0.20, "occupancy": 0.15, "str_yield": 0.15, "yield_gap": 0.05, "saturation": 0.10, "review": 0.35},
-    },
-}
-DEFAULT_PROFILE = "yield"
-
 selected_profile = st.session_state.get("global_profile_key")
 if selected_profile not in PROFILES:
     selected_profile = DEFAULT_PROFILE
@@ -218,6 +106,113 @@ st.session_state["global_lads_cities"] = cities
 st.session_state["global_lads"] = prev_lads
 
 # -----------------------------
+# STYLE (one injection point for the whole page — city/profile/LAD-button
+# CSS depends on selected_cities/selected_profile, computed above, so it's
+# folded in here rather than injected separately later via ad hoc
+# st.markdown("<style>...") calls scattered through the render code)
+# -----------------------------
+t = get_theme()
+
+city_button_css = ""
+for name in CITIES:
+    uri = get_city_img_uri(name)
+    bg_img = f"url('{uri}')" if uri else "none"
+    bg_fallback = "#1a1a1a" if uri else "linear-gradient(135deg, #1B4F72, #10c87a)"
+    shadow = f"0 0 0 3px {TEAL}" if name in selected_cities else "0 2px 12px rgba(0,0,0,0.08)"
+    city_button_css += f"""
+    .st-key-city_{name} button {{
+        height: 220px !important; width: 100% !important; border: none !important;
+        border-radius: 16px !important;
+        background-image: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.65) 100%), {bg_img} !important;
+        background-size: cover !important; background-position: center !important;
+        background-color: {bg_fallback} !important;
+        display: flex !important; align-items: flex-end !important; justify-content: flex-start !important;
+        padding: 16px 20px !important; color: #fff !important; font-size: 1.3rem !important;
+        font-weight: 700 !important; letter-spacing: -0.02em !important; text-align: left !important;
+        box-shadow: {shadow} !important;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }}
+    .st-key-city_{name} button:hover {{
+        transform: translateY(-4px);
+        box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 28px 4px rgba(255,255,255,0.6), 0 10px 24px rgba(0,0,0,0.2) !important;
+    }}
+    """
+
+profile_button_css = "".join(f"""
+.st-key-profile_{key} button {{
+    width: 100% !important; border: none !important; border-radius: 16px !important;
+    background: {t['card_bg']} !important; color: {t['text']} !important;
+    padding: 20px 22px !important; text-align: left !important; font-size: 1.05rem !important;
+    font-weight: 700 !important; white-space: normal !important;
+    box-shadow: {"0 0 0 3px " + TEAL if key == selected_profile else "0 2px 12px rgba(0,0,0,0.08)"} !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}}
+.st-key-profile_{key} button:hover {{
+    transform: translateY(-4px);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.12) !important;
+}}
+""" for key in PROFILES)
+
+inject_css(extra_css=f"""
+.main-title {{ font-size: 2.25rem; font-weight: 800; }}
+.teal {{ color: {TEAL}; }}
+/* Scoped to just the 5 Dashboard/Score Breakdown/etc. nav tabs — NOT a
+   blanket .stButton > button rule. A blanket rule here would apply to
+   every button on the page (city cards, profile cards, LAD select/clear),
+   forcing each of those to fight it back off with !important. Scoping the
+   teal-pill look to only the buttons that actually want it means the
+   others don't have to. (Streamlit puts the st-key-<key> class on the
+   stElementContainer wrapping the button, not on the button/stButton div
+   itself — the descendant selector below still reaches the <button> fine.) */
+.st-key-score_nav_dashboard button,
+.st-key-score_nav_breakdown button,
+.st-key-score_nav_compare button,
+.st-key-score_nav_recommendation button,
+.st-key-score_nav_risks button {{
+    background-color: {TEAL}; color: white; border: none;
+    border-radius: 12px; padding: 0.7rem 1.2rem; font-weight: 600;
+}}
+.st-key-score_nav_dashboard button:hover,
+.st-key-score_nav_breakdown button:hover,
+.st-key-score_nav_compare button:hover,
+.st-key-score_nav_recommendation button:hover,
+.st-key-score_nav_risks button:hover {{
+    background-color: #0b7d73; color: white;
+}}
+.step-label {{
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: {TEAL};
+    margin-bottom: 10px;
+}}
+.profile-card-desc {{
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: {t['text_muted']};
+    margin-top: 8px;
+}}
+[data-testid="stPlotlyChart"] {{
+    border: 1px solid {t['border']};
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+}}
+{city_button_css}
+{profile_button_css}
+.st-key-lads_select_all button, .st-key-lads_clear_all button {{
+    background: transparent !important; color: {TEAL} !important; border: none !important;
+    box-shadow: none !important; padding: 0 !important; height: auto !important;
+    font-size: 0.78rem !important; font-weight: 600 !important; text-decoration: underline !important;
+}}
+.st-key-lads_select_all button:hover, .st-key-lads_clear_all button:hover {{
+    color: #0b7d73 !important; background: transparent !important;
+}}
+""")
+render_navbar(active="Score")
+
+# -----------------------------
 # SEARCH INPUTS (persist across pages via shared session_state keys)
 # -----------------------------
 with st.container():
@@ -227,32 +222,6 @@ with st.container():
     )
 
     st.markdown("<div class='step-label'>1. Select your areas</div>", unsafe_allow_html=True)
-
-    city_css = ""
-    for name in CITIES:
-        uri = get_city_img_uri(name)
-        bg_img = f"url('{uri}')" if uri else "none"
-        bg_fallback = "#1a1a1a" if uri else "linear-gradient(135deg, #1B4F72, #10c87a)"
-        shadow = f"0 0 0 3px {TEAL}" if name in selected_cities else "0 2px 12px rgba(0,0,0,0.08)"
-        city_css += f"""
-        .st-key-city_{name} button {{
-            height: 220px !important; width: 100% !important; border: none !important;
-            border-radius: 16px !important;
-            background-image: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.65) 100%), {bg_img} !important;
-            background-size: cover !important; background-position: center !important;
-            background-color: {bg_fallback} !important;
-            display: flex !important; align-items: flex-end !important; justify-content: flex-start !important;
-            padding: 16px 20px !important; color: #fff !important; font-size: 1.3rem !important;
-            font-weight: 700 !important; letter-spacing: -0.02em !important; text-align: left !important;
-            box-shadow: {shadow} !important;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }}
-        .st-key-city_{name} button:hover {{
-            transform: translateY(-4px);
-            box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 28px 4px rgba(255,255,255,0.6), 0 10px 24px rgba(0,0,0,0.2) !important;
-        }}
-        """
-    st.markdown(f"<style>{city_css}</style>", unsafe_allow_html=True)
 
     city_cols = st.columns(3)
     for col, name in zip(city_cols, CITIES):
@@ -266,19 +235,6 @@ with st.container():
                     s.add(name)
                 st.session_state["global_cities"] = sorted(s)
                 st.rerun()
-
-    st.markdown("""
-    <style>
-    .st-key-lads_select_all button, .st-key-lads_clear_all button {
-        background: transparent !important; color: %s !important; border: none !important;
-        box-shadow: none !important; padding: 0 !important; height: auto !important;
-        font-size: 0.78rem !important; font-weight: 600 !important; text-decoration: underline !important;
-    }
-    .st-key-lads_select_all button:hover, .st-key-lads_clear_all button:hover {
-        color: #0b7d73 !important; background: transparent !important;
-    }
-    </style>
-    """ % TEAL, unsafe_allow_html=True)
 
     label_col, sel_col, clr_col = st.columns([8, 1.3, 1.3])
     with label_col:
@@ -328,25 +284,6 @@ with st.container():
 
     st.markdown("<div class='step-label'>5. Investor profile</div>", unsafe_allow_html=True)
 
-    profile_css = ""
-    for key in PROFILES:
-        shadow = f"0 0 0 3px {TEAL}" if key == selected_profile else "0 2px 12px rgba(0,0,0,0.08)"
-        profile_css += f"""
-        .st-key-profile_{key} button {{
-            width: 100% !important; border: none !important; border-radius: 16px !important;
-            background: {t['card_bg']} !important; color: {t['text']} !important;
-            padding: 20px 22px !important; text-align: left !important; font-size: 1.05rem !important;
-            font-weight: 700 !important; white-space: normal !important;
-            box-shadow: {shadow} !important;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-        }}
-        .st-key-profile_{key} button:hover {{
-            transform: translateY(-4px);
-            box-shadow: 0 4px 18px rgba(0,0,0,0.12) !important;
-        }}
-        """
-    st.markdown(f"<style>{profile_css}</style>", unsafe_allow_html=True)
-
     profile_cols = st.columns(3)
     for col, (key, data) in zip(profile_cols, PROFILES.items()):
         with col:
@@ -392,21 +329,7 @@ else:
         "Short-Term Rental Yield", "Long-Term Rental Yield", "Investment Score",
     ]
 
-    thead_cells = "".join(f"<th>{c}</th>" for c in msoa_table.columns)
-    body_rows = "".join(
-        "<tr>" + "".join(
-            f'<td class="score-cell">{row["Investment Score"]}</td>' if col == "Investment Score" else f"<td>{row[col]}</td>"
-            for col in msoa_table.columns
-        ) + "</tr>"
-        for _, row in msoa_table.iterrows()
-    )
-    st.markdown(
-        f'''<div class="table-card"><table class="styled-table">
-            <thead><tr>{thead_cells}</tr></thead>
-            <tbody>{body_rows}</tbody>
-        </table></div>''',
-        unsafe_allow_html=True,
-    )
+    render_styled_table(msoa_table, highlight_cols=["Investment Score"])
 
 # -----------------------------
 # INVESTMENT SCORE MAP
@@ -467,7 +390,9 @@ else:
                 height=460,
             )
             fig.update_traces(marker_line_width=1, marker_line_color="#ffffff")
-            fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="rgba(0,0,0,0)", font_family="Inter")
+            fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="rgba(0,0,0,0)")
+            style_chart(fig)
+            fig.update_layout(coloraxis_colorbar=dict(title_font_color="#1a1a1a", tickfont_color="#1a1a1a"))
             st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
 
 st.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
@@ -530,15 +455,7 @@ if st.session_state.score_page == "Dashboard":
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.markdown(
-                f"""
-                <div class="card">
-                <p>Investment Score</p>
-                <div class="score">{best_area['investment_score']}/100</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
+            render_stat_card("Investment Score", best_area["investment_score"], unit="/ 100", big=True)
 
         with col2:
             st.metric("Recommended Area", best_area["lad_name"])
@@ -550,21 +467,18 @@ if st.session_state.score_page == "Dashboard":
 
         st.subheader("Top 5 Investment Areas")
 
-        top5 = city_df.sort_values("investment_score", ascending=False).head(5)
+        top5 = city_df.sort_values("investment_score", ascending=False).head(5)[
+            ["lad_name", "investment_score", "str_gross_yield", "ltr_gross_yield",
+             "str_annual_revenue_est", "total_listings"]
+        ].copy()
+        top5["investment_score"] = top5["investment_score"].round(1)
+        top5["str_gross_yield"] = (top5["str_gross_yield"] * 100).round(2).astype(str) + "%"
+        top5["ltr_gross_yield"] = (top5["ltr_gross_yield"] * 100).round(2).astype(str) + "%"
+        top5["str_annual_revenue_est"] = top5["str_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
+        top5.columns = ["Local Authority District", "Investment Score", "STR Yield",
+                         "LTR Yield", "Est. STR Revenue", "Total Listings"]
 
-        st.dataframe(
-            top5[
-                [
-                    "lad_name",
-                    "investment_score",
-                    "str_gross_yield",
-                    "ltr_gross_yield",
-                    "str_annual_revenue_est",
-                    "total_listings"
-                ]
-            ],
-            use_container_width=True
-        )
+        render_styled_table(top5, highlight_cols=["Investment Score"])
 
 # -----------------------------
 # SCORE BREAKDOWN
@@ -595,7 +509,17 @@ elif st.session_state.score_page == "Score Breakdown":
             ]
         })
 
-        st.bar_chart(breakdown.set_index("Metric"))
+        breakdown_fig = px.bar(
+            breakdown, x="Metric", y="Score",
+            color_discrete_sequence=[TEAL],
+            template="plotly_white",
+        )
+        breakdown_fig.update_layout(
+            height=360, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+            margin=dict(t=20), showlegend=False,
+        )
+        style_chart(breakdown_fig)
+        st.plotly_chart(breakdown_fig, use_container_width=True)
 
         st.markdown(
             f"""
@@ -632,10 +556,38 @@ elif st.session_state.score_page == "Compare Areas":
 
     available_cols = [c for c in cols if c in ranked.columns]
 
-    st.dataframe(ranked[available_cols], use_container_width=True)
+    ranked_display = ranked[available_cols].copy()
+    if "investment_score" in ranked_display.columns:
+        ranked_display["investment_score"] = ranked_display["investment_score"].round(1)
+    for pct_col in ["str_gross_yield", "ltr_gross_yield", "str_vs_ltr_yield_delta"]:
+        if pct_col in ranked_display.columns:
+            ranked_display[pct_col] = (ranked_display[pct_col] * 100).round(2).astype(str) + "%"
+    if "str_annual_revenue_est" in ranked_display.columns:
+        ranked_display["str_annual_revenue_est"] = ranked_display["str_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
+    if "avg_nightly_price" in ranked_display.columns:
+        ranked_display["avg_nightly_price"] = ranked_display["avg_nightly_price"].apply(lambda x: f"£{x:,.0f}")
+    if "avg_review_score" in ranked_display.columns:
+        ranked_display["avg_review_score"] = ranked_display["avg_review_score"].round(2)
+    ranked_display.columns = [
+        c.replace("_", " ").title().replace("Str", "STR").replace("Ltr", "LTR").replace("Lad", "LAD")
+        for c in ranked_display.columns
+    ]
+
+    render_styled_table(ranked_display, highlight_cols=["Investment Score"])
 
     st.subheader("Investment Score Ranking")
-    st.bar_chart(ranked.set_index("lad_name")["investment_score"])
+    ranking_fig = px.bar(
+        ranked, x="lad_name", y="investment_score",
+        color_discrete_sequence=[TEAL],
+        labels={"lad_name": "", "investment_score": "Investment Score"},
+        template="plotly_white",
+    )
+    ranking_fig.update_layout(
+        height=360, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=20), showlegend=False,
+    )
+    style_chart(ranking_fig)
+    st.plotly_chart(ranking_fig, use_container_width=True)
 
 # -----------------------------
 # RECOMMENDATION
@@ -780,6 +732,10 @@ but returns depend on maintaining good occupancy and managing costs effectively.
 
         # Additional investor information
         st.subheader("Additional Risk Information")
+        st.caption(
+            "General guidance for UK short-term-let investing — not specific to "
+            f"{best_area['lad_name']} or calculated from this app's data."
+        )
 
         with st.expander("🤖 AI Use & Data Policy"):
             st.write("""

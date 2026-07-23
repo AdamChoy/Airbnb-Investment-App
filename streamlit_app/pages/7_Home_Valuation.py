@@ -6,23 +6,13 @@ import plotly.graph_objects as go
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import streamlit as st
-from theme import TEAL, get_theme, inject_css, render_navbar, render_stripes
+from theme import TEAL, get_theme, inject_css, render_navbar, style_chart, render_stat_card
 
 st.set_page_config(page_title="Home Valuation · InvestStay", page_icon="🏡", layout="wide", initial_sidebar_state="collapsed")
 
 t = get_theme()
 inject_css(extra_css=f"""
 .val-title {{ font-size: 2.25rem; font-weight: 800; margin-bottom: 4px; }}
-.val-card {{
-    background: {t['card_bg']}; border-radius: 16px; padding: 24px 28px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.06); height: 100%;
-}}
-.val-label {{
-    font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 0.1em; color: {t['text']}; margin-bottom: 10px;
-}}
-.val-number {{ font-size: 2.4rem; font-weight: 800; color: {TEAL}; line-height: 1; }}
-.val-note {{ font-size: 0.85rem; color: {t['text_muted']}; margin-top: 6px; }}
 .val-disclaimer {{
     background: {t['card_alt_bg']}; border-radius: 12px; padding: 16px 20px;
     font-size: 0.85rem; color: {t['text_muted']}; margin-top: 24px;
@@ -43,7 +33,6 @@ st.markdown(
     f"<p style='color:{MID};margin-bottom:20px;'>An area-level estimate based on median transaction prices for your neighbourhood.</p>",
     unsafe_allow_html=True,
 )
-render_stripes()
 
 # ── Location picker ──────────────────────────────────────────────────────────
 c1, c2, c3 = st.columns(3)
@@ -75,69 +64,26 @@ area = row.iloc[0]
 st.markdown("<div style='height:24px;'></div>", unsafe_allow_html=True)
 
 # ── Headline valuation ───────────────────────────────────────────────────────
-col1, col2, col3, col4, col5 = st.columns(5)
+col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.markdown(
-        f"""
-        <div class="val-card">
-            <div class="val-label">Estimated Value (2025)</div>
-            <div class="val-number">£{area['median_house_price_2025']:,.0f}</div>
-            <div class="val-note">Median transaction price, {msoa_name}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_stat_card(
+        "Estimated Value (2025)", f"£{area['median_house_price_2025']:,.0f}",
+        note=f"Median transaction price, {msoa_name}", min_height=188,
     )
 
 with col2:
     growth_pct = area["price_growth_10yr"] * 100
-    st.markdown(
-        f"""
-        <div class="val-card">
-            <div class="val-label">10-Year Price Growth</div>
-            <div class="val-number">{growth_pct:+.1f}%</div>
-            <div class="val-note">From £{area['median_house_price_2015']:,.0f} in 2015</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_stat_card(
+        "10-Year Price Growth", f"{growth_pct:+.1f}%",
+        note=f"From £{area['median_house_price_2015']:,.0f} in 2015", min_height=188,
     )
 
 with col3:
-    st.markdown(
-        f"""
-        <div class="val-card">
-            <div class="val-label">Estimated Monthly Rent</div>
-            <div class="val-number">£{area['median_monthly_rent']:,.0f}</div>
-            <div class="val-note">Median long-term rent, {lad}</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with col4:
-    str_monthly = area["str_annual_revenue_est"] / 12
-    st.markdown(
-        f"""
-        <div class="val-card">
-            <div class="val-label">Short-Term Rental</div>
-            <div class="val-number">£{str_monthly:,.0f}</div>
-            <div class="val-note">Estimated gross yield: {area['str_gross_yield']*100:.2f}%</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-with col5:
     value_2035 = area["median_house_price_2025"] * (1 + area["price_growth_10yr"])
-    st.markdown(
-        f"""
-        <div class="val-card">
-            <div class="val-label">Projected Value (2035)</div>
-            <div class="val-number">£{value_2035:,.0f}</div>
-            <div class="val-note">If the last 10 years' growth rate continues</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_stat_card(
+        "Projected Value (2035)", f"£{value_2035:,.0f}",
+        note="If the last 10 years' growth rate continues", min_height=188,
     )
 
 st.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
@@ -154,30 +100,34 @@ fig.add_trace(go.Scatter(
     x=[2025, 2035], y=[area["median_house_price_2025"], value_2035],
     mode="lines+markers", name="Projected", line=dict(color=TEAL, width=3, dash="dash"), marker=dict(size=8),
 ))
-fig.update_xaxes(tickvals=[2015, 2025, 2035], title_text="Year", color="#1a1a1a")
-fig.update_yaxes(title_text="Median House Price (£)", color="#1a1a1a")
 fig.update_layout(
     height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",
-    font_family="Inter", font_color="#1a1a1a", margin=dict(t=20),
-    legend_title_text="", template="plotly_white",
+    margin=dict(t=20), legend=dict(title_text=""), template="plotly_white",
 )
+fig.update_xaxes(tickvals=[2015, 2025, 2035], title_text="Year")
+fig.update_yaxes(title_text="Median House Price (£)")
+style_chart(fig)
 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 # ── Rental potential ─────────────────────────────────────────────────────────
-st.markdown("<div class='section-header'>If You Let This Property Out Long-Term</div>", unsafe_allow_html=True)
+st.markdown("<div class='section-header'>Rental Income Potential</div>", unsafe_allow_html=True)
+st.markdown(
+    f"<p style='color:{MID};font-size:0.9rem;margin-bottom:16px;'>How this property could perform as a short-term (Airbnb) vs. long-term let.</p>",
+    unsafe_allow_html=True,
+)
 
-r1, _ = st.columns(2)
+r1, r2 = st.columns(2)
 with r1:
+    str_monthly = area["str_annual_revenue_est"] / 12
+    render_stat_card(
+        "Short-Term Rental (Airbnb)", f"£{str_monthly:,.0f}", unit="/ month",
+        note=f"Estimated gross yield: {area['str_gross_yield']*100:.2f}%",
+    )
+with r2:
     ltr_monthly = area["ltr_annual_revenue_est"] / 12
-    st.markdown(
-        f"""
-        <div class="val-card">
-            <div class="val-label">Long-Term Rental (LTR)</div>
-            <div class="val-number">£{ltr_monthly:,.0f}<span style="font-size:1rem;color:{MID};"> / month</span></div>
-            <div class="val-note">Estimated gross yield: {area['ltr_gross_yield']*100:.2f}%</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_stat_card(
+        "Long-Term Rental", f"£{ltr_monthly:,.0f}", unit="/ month",
+        note=f"Estimated gross yield: {area['ltr_gross_yield']*100:.2f}%",
     )
 
 st.markdown(
@@ -190,3 +140,5 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+
+st.markdown("<div style='height:48px;'></div>", unsafe_allow_html=True)

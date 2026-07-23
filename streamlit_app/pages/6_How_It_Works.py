@@ -3,17 +3,16 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from theme import TEAL, inject_css, render_navbar, render_stripes
+from theme import TEAL, inject_css, render_navbar
 
 st.set_page_config(page_title="How It Works · InvestStay", page_icon="⚙️", layout="wide", initial_sidebar_state="collapsed")
 
 t = inject_css()
 NAVY = t["text"]; LIGHT = t["bg"]; WHITE = t["card_bg"]; MID = t["text_muted"]
-render_navbar(active="How it works")
+render_navbar(active="How it Works")
 
 st.markdown(f"<h2 style='color:{NAVY};font-weight:800;margin-bottom:4px;'>How It Works</h2>", unsafe_allow_html=True)
 st.markdown(f"<p style='color:{MID};margin-bottom:24px;'>From open data to an investment signal — the pipeline behind InvestStay.</p>", unsafe_allow_html=True)
-render_stripes()
 
 STEPS = [
     ("Ingest", "We pull raw listings from Inside Airbnb alongside Land Registry house prices, ONS rents and transport access, and NHS/OS amenity data — all open datasets, refreshed on a schedule."),

@@ -6,7 +6,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from theme import TEAL, inject_css, render_navbar, render_stripes
+from theme import TEAL, inject_css, render_navbar, style_chart
 
 st.set_page_config(page_title="Yield Analysis · InvestStay", page_icon="📈", layout="wide", initial_sidebar_state="collapsed")
 
@@ -25,7 +25,6 @@ msoa_df, lad_df = load_data()
 
 st.markdown(f"<h2 style='color:{NAVY};font-weight:800;margin-bottom:4px;'>Yield Analysis</h2>", unsafe_allow_html=True)
 st.markdown(f"<p style='color:{MID};margin-bottom:24px;'>Compare STR and LTR gross yields across cities and neighbourhoods.</p>", unsafe_allow_html=True)
-render_stripes()
 
 cities = ["All"] + sorted(msoa_df["city"].dropna().str.title().unique().tolist())
 if st.session_state.get("global_city_filter") not in cities:
@@ -56,8 +55,8 @@ fig1.add_trace(go.Scatter(
     mode="lines", line=dict(color="lightgrey", dash="dash", width=1),
     name="STR = LTR", showlegend=True
 ))
-fig1.update_layout(height=480, plot_bgcolor=WHITE, paper_bgcolor=WHITE,
-                   font=dict(family="Inter, Segoe UI, sans-serif"))
+fig1.update_layout(height=480, plot_bgcolor=WHITE, paper_bgcolor=WHITE)
+style_chart(fig1)
 st.plotly_chart(fig1, use_container_width=True)
 st.caption("Points above the dashed line = STR outperforms LTR on gross yield.")
 
@@ -81,8 +80,8 @@ fig2 = px.bar(
 )
 fig2.update_layout(height=480, showlegend=False, coloraxis_showscale=False,
                    plot_bgcolor=WHITE, paper_bgcolor=WHITE,
-                   yaxis=dict(autorange="reversed"),
-                   font=dict(family="Inter, Segoe UI, sans-serif"))
+                   yaxis=dict(autorange="reversed"))
+style_chart(fig2)
 st.plotly_chart(fig2, use_container_width=True)
 
 # ── Yield by city box plot ────────────────────────────────────────────────────
@@ -96,6 +95,6 @@ fig3 = px.box(
     template="plotly_white",
 )
 fig3.update_layout(height=380, showlegend=False,
-                   plot_bgcolor=WHITE, paper_bgcolor=WHITE,
-                   font=dict(family="Inter, Segoe UI, sans-serif"))
+                   plot_bgcolor=WHITE, paper_bgcolor=WHITE)
+style_chart(fig3)
 st.plotly_chart(fig3, use_container_width=True)
