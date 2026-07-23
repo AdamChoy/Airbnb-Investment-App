@@ -102,6 +102,7 @@ NAV_LINKS = [
     ("/Home_Valuation", "Valuation"),
     ("/Data_Dictionary", "Data"),
     ("/How_It_Works", "How it works"),
+    ("/About_Us", "About Us"),
 ]
 
 
@@ -123,7 +124,7 @@ def render_navbar(active=None):
     # rule and swallow the rest of the navbar HTML into a <pre> block — so an
     # HTML comment stands in for "no CTA" instead of an empty string.
     cta_html = (
-        '<a href="/Investment_Score" target="_self" class="nav-cta-btn">Analyse Investment</a>'
+        '<a href="/Investment_Score" target="_self" class="nav-cta-btn">Analyse a property →</a>'
         if active != "Score" else "<!-- no CTA on the Score page -->"
     )
 
@@ -143,20 +144,33 @@ def render_navbar(active=None):
         margin-top: 0 !important;
         max-width: 100% !important;
     }}
+    /* The navbar is position:fixed (escapes every ancestor's padding/
+       max-width entirely, so it's immune to however many nested
+       containers Streamlit wraps content in). Since a fixed element is
+       pulled out of normal flow, this reserves the same space back so
+       page content doesn't render underneath it. */
+    [data-testid="stMainBlockContainer"] {{
+        padding-top: 74px !important;
+    }}
     [data-testid="stMain"] > div:first-child,
     [data-testid="stElementContainer"]:first-of-type {{
         margin-top: 0 !important;
-        padding-top: 0 !important;
+    }}
+    [data-testid="stMainBlockContainer"] > [data-testid="stVerticalBlock"] {{
+        gap: 0 !important;
     }}
     .navbar {{
         display: flex;
         align-items: center;
         justify-content: space-between;
         padding: 4px 48px;
-        margin: 0 -32px;
-        background: var(--bg, {t['bg']});
-        position: sticky;
+        position: fixed;
         top: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        background: {t['card_bg']};
+        border-bottom: 1px solid {t['border']};
         z-index: 100;
     }}
     .navbar-left {{
@@ -198,19 +212,24 @@ def render_navbar(active=None):
         gap: 14px;
     }}
     .nav-cta-btn {{
-        background: {t['text']};
-        color: {t['bg']} !important;
+        background: {TEAL};
+        color: #ffffff !important;
         padding: 10px 24px;
         border-radius: 8px;
         font-size: 0.875rem;
-        font-weight: 500;
-        text-decoration: none;
+        font-weight: 600;
+        text-decoration: none !important;
         line-height: 1.2;
         display: inline-flex;
         align-items: center;
         margin-top: auto;
         margin-bottom: auto;
         font-family: 'Inter', sans-serif;
+        transition: transform 0.15s ease, background 0.15s ease;
+    }}
+    .nav-cta-btn:hover {{
+        background: #0b7a70;
+        transform: translateY(-1px);
     }}
     .settings-btn {{
         display: flex;
@@ -230,7 +249,7 @@ def render_navbar(active=None):
     .st-key-settings_menu {{
         position: fixed;
         top: 46px;
-        right: 48px;
+        right: 254px;
         z-index: 1000;
         background: {t['card_bg']};
         padding: 14px 18px;
@@ -263,13 +282,13 @@ def render_navbar(active=None):
             <ul class="nav-links">{links_html}</ul>
         </div>
         <div class="navbar-right">
-            {cta_html}
             <a href="#" onclick="return false;" class="settings-btn" title="Settings" aria-label="Settings">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="3"/>
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                 </svg>
             </a>
+            {cta_html}
         </div>
     </div>
     """, unsafe_allow_html=True)

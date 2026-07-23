@@ -51,7 +51,7 @@ CITIES = ["London", "Manchester", "Bristol"]
 # -----------------------------
 t = get_theme()
 inject_css(extra_css=f"""
-.main-title {{ font-size: 42px; font-weight: 800; }}
+.main-title {{ font-size: 2.25rem; font-weight: 800; }}
 .teal {{ color: {TEAL}; }}
 .score {{ font-size: 54px; font-weight: 800; color: {TEAL}; }}
 .stButton > button {{
@@ -240,7 +240,7 @@ st.session_state["global_lads"] = prev_lads
 # -----------------------------
 with st.container():
     st.markdown(
-        '<div class="main-title" style="margin-bottom:20px;">Find your perfect <span class="teal">property</span></div>',
+        '<div class="main-title" style="margin-bottom:20px;">Find Your Perfect <span class="teal">Property</span></div>',
         unsafe_allow_html=True,
     )
 
@@ -286,6 +286,21 @@ with st.container():
         label_visibility="collapsed",
     )
 
+    st.markdown("<div class='step-label'>5. Transport &amp; GP amenities</div>", unsafe_allow_html=True)
+    amen_col1, amen_col2 = st.columns(2)
+    with amen_col1:
+        transport_access = st.selectbox(
+            "Transport access",
+            ["Any", "Within 15-min walk", "Within 30-min walk"],
+            key="global_transport",
+        )
+    with amen_col2:
+        min_gp = st.slider(
+            "Minimum GP surgeries nearby",
+            0, int(msoa_df["gp_surgery_count"].max()), 0,
+            key="global_min_gp",
+        )
+
     analyse = st.button("Analyse Investment")
 
     if analyse:
@@ -301,12 +316,17 @@ if "median_house_price_2025" in suitable_msoas.columns:
     suitable_msoas = suitable_msoas[
         suitable_msoas["median_house_price_2025"].between(budget_min, budget_max)
     ]
+if transport_access == "Within 15-min walk":
+    suitable_msoas = suitable_msoas[suitable_msoas["less_than_15_minute_walk"].fillna(0) > 0]
+elif transport_access == "Within 30-min walk":
+    suitable_msoas = suitable_msoas[suitable_msoas["less_than_30_minute_walk"].fillna(0) > 0]
+suitable_msoas = suitable_msoas[suitable_msoas["gp_surgery_count"].fillna(0) >= min_gp]
 suitable_msoas = suitable_msoas.sort_values("investment_score", ascending=False)
 
 st.markdown("<div class='step-label' style='margin-top:8px;'>Suitable areas</div>", unsafe_allow_html=True)
 
 if suitable_msoas.empty:
-    st.warning(f"Out of budget — no areas in {', '.join(cities)} fall within £{budget_min:,}–£{budget_max:,}. Try adjusting your budget.")
+    st.warning(f"No areas in {', '.join(cities)} match your budget, transport and amenity filters. Try widening them.")
 else:
     msoa_table = suitable_msoas[
         ["msoa_name", "city", "lad_name", "median_house_price_2025",

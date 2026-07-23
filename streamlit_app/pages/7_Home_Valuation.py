@@ -12,7 +12,7 @@ st.set_page_config(page_title="Home Valuation · InvestStay", page_icon="🏡", 
 
 t = get_theme()
 inject_css(extra_css=f"""
-.val-title {{ font-size: 2.2rem; font-weight: 800; margin-bottom: 4px; }}
+.val-title {{ font-size: 2.25rem; font-weight: 800; margin-bottom: 4px; }}
 .val-card {{
     background: {t['card_bg']}; border-radius: 16px; padding: 24px 28px;
     box-shadow: 0 2px 12px rgba(0,0,0,0.06); height: 100%;

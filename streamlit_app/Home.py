@@ -317,7 +317,8 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     align-items: center;
     justify-content: space-between;
     padding: 4px 48px;
-    background: var(--bg);
+    background: {THEME['card_bg']};
+    border-bottom: 1px solid {THEME['border']};
     position: sticky;
     top: 0;
     z-index: 1101;
@@ -642,7 +643,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
             <li><a href="/Home_Valuation" target="_self">Valuation</a></li>
             <li><a href="/Data_Dictionary" target="_self">Data</a></li>
             <li><a href="/How_It_Works" target="_self">How It Works</a></li>
-            <li><a href="#section-footer" target="_self">About Us</a></li>
+            <li><a href="/About_Us" target="_self">About Us</a></li>
         </ul>
     </div>
     <div class="navbar-right">
@@ -717,7 +718,27 @@ components.html("""
 if lad_geojson:
     map_df = lad_df[lad_df["city"].isin(["london", "bristol", "manchester"])].copy()
     map_df["City"] = map_df["city"].str.title()
-    map_df["Airbnb Listings"] = map_df["total_listings"]
+    map_df["No. of Airbnb Listings"] = map_df["total_listings"]
+
+    # Same lightweight scoring formula used on the Investment Score page,
+    # so the map tooltip can show a real (not fabricated) investment score.
+    def _normalise(series):
+        if series.max() == series.min():
+            return series * 0
+        return ((series - series.min()) / (series.max() - series.min())) * 100
+
+    _revenue_score = _normalise(map_df["str_annual_revenue_est"])
+    _occupancy_score = _normalise(365 - map_df["avg_availability_365"])
+    _yield_score = _normalise(map_df["str_gross_yield"])
+    _saturation_score = 100 - _normalise(map_df["total_listings"])
+    map_df["Investment Score"] = (
+        0.35 * _revenue_score + 0.30 * _occupancy_score
+        + 0.25 * _yield_score + 0.10 * _saturation_score
+    ).round(1)
+    map_df["Investment Rank"] = map_df["Investment Score"].rank(ascending=False, method="min").astype(int)
+    map_df["Estimated STR Revenue"] = map_df["str_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
+    map_df["Estimated LTR Revenue"] = map_df["ltr_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
+    map_df["Average Rating"] = map_df["avg_review_score"].round(2)
 
     st.markdown("""
     <div id="section-map" class="content-section" style="padding-bottom:0;">
@@ -725,20 +746,37 @@ if lad_geojson:
     </div>
     """, unsafe_allow_html=True)
 
+    hover_cols = [
+        "City", "No. of Airbnb Listings", "Investment Rank", "Investment Score",
+        "Estimated STR Revenue", "Estimated LTR Revenue", "Average Rating",
+    ]
     map_fig = px.choropleth_map(
         map_df,
         geojson=lad_geojson,
         locations="lad_code",
         featureidkey="properties.lad_code",
-        color="Airbnb Listings",
+        color="No. of Airbnb Listings",
         color_continuous_scale=[[0, "#9CC9C2"], [1, "#0D9488"]],
         hover_name="lad_name",
-        hover_data={"City": True, "lad_code": False, "Airbnb Listings": True},
+        custom_data=hover_cols,
         map_style="carto-positron",
         zoom=5.4,
         center={"lat": 53.4, "lon": -1.9},
-        opacity=1.0,
+        opacity=0.85,
         height=520,
+    )
+    map_fig.update_traces(
+        hovertemplate=(
+            "<b>%{hovertext}</b><br>"
+            "City - %{customdata[0]}<br>"
+            "No. of Airbnb Listings - %{customdata[1]}<br>"
+            "Investment Rank - %{customdata[2]}<br>"
+            "Investment Score - %{customdata[3]}<br>"
+            "Estimated STR Revenue - %{customdata[4]}<br>"
+            "Estimated LTR Revenue - %{customdata[5]}<br>"
+            "Average Rating - %{customdata[6]}"
+            "<extra></extra>"
+        )
     )
     map_fig.update_traces(marker_line_width=1, marker_line_color="#ffffff")
     map_fig.update_layout(
@@ -747,6 +785,7 @@ if lad_geojson:
         font_family="Inter",
         font_color="#1a1a1a",
         coloraxis_colorbar=dict(title_font_color="#1a1a1a", tickfont_color="#1a1a1a"),
+        hoverlabel=dict(bgcolor="#ffffff", font_color="#1a1a1a", font_family="Inter", bordercolor=TEAL),
     )
     st.markdown('<div class="content-section" style="padding-top:0;">', unsafe_allow_html=True)
     map_col_l, map_col_mid, map_col_r = st.columns([1, 20, 1])
@@ -813,13 +852,17 @@ st.markdown(
     "<div class='content-section'><div class='section-title'>Yields &amp; Growth at a Glance</div></div>",
     unsafe_allow_html=True,
 )
-chart_col1, chart_col2 = st.columns(2)
-with chart_col1:
-    st.markdown("<p style='font-weight:600;margin-bottom:8px;'>STR vs LTR Gross Yield by City</p>", unsafe_allow_html=True)
-    st.plotly_chart(bar_fig, use_container_width=True, config={"displayModeBar": False})
-with chart_col2:
-    st.markdown("<p style='font-weight:600;margin-bottom:8px;'>Median House Price Growth, 2015–25</p>", unsafe_allow_html=True)
-    st.plotly_chart(line_fig, use_container_width=True, config={"displayModeBar": False})
+chart_pad_l, chart_mid, chart_pad_r = st.columns([1, 20, 1])
+with chart_mid:
+    chart_col1, chart_col2 = st.columns(2)
+    with chart_col1:
+        st.markdown("<p style='font-weight:600;margin-bottom:8px;'>STR vs LTR Gross Yield by City</p>", unsafe_allow_html=True)
+        st.plotly_chart(bar_fig, use_container_width=True, config={"displayModeBar": False})
+    with chart_col2:
+        st.markdown("<p style='font-weight:600;margin-bottom:8px;'>Median House Price Growth, 2015–25</p>", unsafe_allow_html=True)
+        st.plotly_chart(line_fig, use_container_width=True, config={"displayModeBar": False})
+
+st.markdown('<div style="height:48px;"></div>', unsafe_allow_html=True)
 
 # ── Combined footer ───────────────────────────────────────────────────────────
 st.markdown(f"""
@@ -867,6 +910,7 @@ st.markdown(f"""
         <div class="footer-col-title">About</div>
         <ul class="footer-links">
             <li><a href="/How_It_Works" target="_self">How It Works</a></li>
+            <li><a href="/About_Us" target="_self">About Us</a></li>
             <li><a href="https://github.com/AdamChoy/Airbnb-Investment-App" target="_blank">GitHub</a></li>
         </ul>
     </div>
@@ -884,10 +928,10 @@ st.markdown(f"""
         </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:center;">
-        {logo_img}
+        <div style="transform:translateY(16px);">{logo_img}</div>
     </div>
     <div style="font-size:0.78rem;color:var(--text-muted);text-align:right;line-height:1.8;justify-self:end;">
-        Data sourced from Inside Airbnb &middot; Land Registry &middot; ONS &middot; OS OpenData
+        Data sourced from: Inside Airbnb &middot; Land Registry &middot; ONS &middot; OS OpenData
     </div>
 </div>
 """, unsafe_allow_html=True)
