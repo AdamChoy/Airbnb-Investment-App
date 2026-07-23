@@ -45,6 +45,10 @@ def inject_css(extra_css=""):
         [data-testid="stSidebar"] * {{ color:{t['text']} !important; }}
         [data-testid="stSidebar"] hr {{ border-color:{t['border']}; }}
         #MainMenu, footer, header {{ visibility:hidden; }}
+        /* Streamlit's own widget labels (st.slider/selectbox/multiselect/etc.)
+           ship a fixed near-black color that's fine on a white background but
+           unreadable on our dark-mode background — override it to match. */
+        [data-testid="stWidgetLabel"] p {{ color:{t['text']} !important; }}
         .section-header {{
             font-size:1.1rem; font-weight:700; color:{t['text']}; text-transform:uppercase;
             letter-spacing:0.08em; border-bottom:2px solid {TEAL}; padding-bottom:6px; margin:24px 0 16px 0;
