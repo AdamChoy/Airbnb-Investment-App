@@ -72,10 +72,10 @@ navbar_logo_img = f'<img src="data:image/png;base64,{logo_b64}" style="height:82
 # ── Load hero carousel images ───────────────────────────────────────────────────
 def get_asset_uri(stem):
     assets_dir = os.path.join(os.path.dirname(__file__), "assets")
-    for ext in (".jpg", ".jpeg", ".png", ".webp"):
+    for ext in (".jpg", ".jpeg", ".png", ".webp", ".svg"):
         path = os.path.join(assets_dir, f"{stem}{ext}")
         if os.path.exists(path):
-            mime = "jpeg" if ext in (".jpg", ".jpeg") else ext.lstrip(".")
+            mime = {"jpg": "jpeg", "svg": "svg+xml"}.get(ext.lstrip("."), ext.lstrip("."))
             with open(path, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode()
             return f"data:image/{mime};base64,{b64}"
@@ -138,9 +138,9 @@ cities_covered = msoa_df["city"].nunique()
 METRICS = [
     (f"{total_listings:,}", "Total Airbnb Listings"),
     (f"{total_msoas:,}", "MSOAs Analysed"),
-    (f"{avg_str_yield*100:.1f}%", "Average Short-Term Rental (STR) Gross Yield"),
-    (f"+{top_delta*100:.1f}%", "Best STR vs LTR Delta"),
-    (f"{avg_ltr_yield*100:.1f}%", "Average Long-Term Rental (LTR) Gross Yield"),
+    (f"{avg_str_yield*100:.1f}%", "Average Short-Term Rental (STR) Yearly Gross Yield"),
+    (f"+{top_delta*100:.1f}%", "Best Yearly STR vs LTR Delta"),
+    (f"{avg_ltr_yield*100:.1f}%", "Average Long-Term Rental (LTR) Yearly Gross Yield"),
     (f"{cities_covered}", "Cities Covered"),
 ]
 metric_items_html = "".join(
@@ -150,6 +150,34 @@ metric_items_html = "".join(
     </div>'''
     for num, lbl in METRICS
 )
+
+# ── Built-with logo marquee ──────────────────────────────────────────────────
+TECH_STACK = [
+    ("airbnb", "Inside Airbnb", 60),
+    ("claude", "Claude", 60),
+    ("openai", "OpenAI", 60),
+    ("databricks", "Databricks", 60),
+    ("streamlit", "Streamlit", 60),
+]
+tech_logos = [(get_asset_uri(f"logo_{stem}") or get_asset_uri(stem), label, size) for stem, label, size in TECH_STACK]
+tech_logos = [(uri, label, size) for uri, label, size in tech_logos if uri]
+tech_items_html = "".join(
+    f'''<div class="tech-item">
+        <img src="{uri}" alt="{label}" style="height:{size}px;" />
+        <span>{label}</span>
+    </div>'''
+    for uri, label, size in tech_logos
+)
+tech_section_html = f'''
+<div class="tech-section">
+    <div class="tech-label">Built With</div>
+    <div class="tech-marquee">
+        <div class="tech-track">
+            {tech_items_html}
+        </div>
+    </div>
+</div>
+''' if tech_logos else ""
 
 # ── Footer constants ──────────────────────────────────────────────────────────
 LINKEDIN_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M22.23 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.46c.98 0 1.77-.77 1.77-1.72V1.72C24 .77 23.21 0 22.23 0zM7.06 20.45H3.56V9h3.5v11.45zM5.31 7.43c-1.12 0-2.03-.92-2.03-2.05 0-1.13.91-2.05 2.03-2.05 1.12 0 2.03.92 2.03 2.05 0 1.13-.91 2.05-2.03 2.05zM20.45 20.45h-3.5v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.13 1.44-2.13 2.94v5.67h-3.5V9h3.36v1.56h.05c.47-.89 1.62-1.85 3.34-1.85 3.57 0 4.23 2.35 4.23 5.41v6.33z"/></svg>'
@@ -531,6 +559,56 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     letter-spacing: 0.06em;
 }}
 
+/* ── Built-with marquee ── */
+.tech-section {{
+    padding: 40px 48px 24px;
+    margin: 0 32px 56px;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}}
+.tech-label {{
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #000;
+    text-align: center;
+    margin-bottom: 20px;
+}}
+.tech-track {{
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+}}
+.tech-item {{
+    flex: 0 0 auto;
+    width: 220px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 20px;
+}}
+.tech-item img {{
+    height: 36px;
+    width: auto;
+    max-width: 200px;
+    object-fit: contain;
+    filter: grayscale(100%);
+    opacity: 0.55;
+    transition: filter 0.2s ease, opacity 0.2s ease;
+}}
+.tech-item:hover img {{
+    filter: grayscale(0%);
+    opacity: 1;
+}}
+.tech-item span {{
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    letter-spacing: 0.02em;
+}}
+
 /* ── Content section ── */
 .content-section {{
     padding: 0 48px 24px;
@@ -639,7 +717,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
             <li><a href="/Explore_Areas" target="_self">Explore</a></li>
             <li><a href="/Yield_Analysis" target="_self">Yields</a></li>
             <li><a href="/Sentiment" target="_self">Sentiment</a></li>
-            <li><a href="/Investment_Score" target="_self">Score</a></li>
+            <li><a href="/Property_Analysis" target="_self">Score</a></li>
             <li><a href="/Home_Valuation" target="_self">Valuation</a></li>
             <li><a href="/Data_Dictionary" target="_self">Data</a></li>
             <li><a href="/How_It_Works" target="_self">How It Works</a></li>
@@ -664,7 +742,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
             Find your perfect property to invest in.
         </h1>
         <p class="hero-subheading">From raw data to real returns. Built on open data. Designed for smarter property investment.</p>
-        <a href="/Investment_Score" target="_self" class="hero-cta-btn">Analyse a property →</a>
+        <a href="/Property_Analysis" target="_self" class="hero-cta-btn">Analyse a property →</a>
     </div>
 </div>
 <div class="stripes">
@@ -864,6 +942,11 @@ with chart_mid:
 
 st.markdown('<div style="height:48px;"></div>', unsafe_allow_html=True)
 
+st.markdown(f"""
+<!-- ═══ BUILT WITH ═══ -->
+{tech_section_html}
+""", unsafe_allow_html=True)
+
 # ── Combined footer ───────────────────────────────────────────────────────────
 st.markdown(f"""
 
@@ -890,7 +973,7 @@ st.markdown(f"""
         <div class="footer-col-title">Analysis</div>
         <ul class="footer-links">
             <li><a href="/Yield_Analysis" target="_self">Yield Analysis</a></li>
-            <li><a href="/Investment_Score" target="_self">Investment Score</a></li>
+            <li><a href="/Property_Analysis" target="_self">Investment Score</a></li>
             <li><a href="/Home_Valuation" target="_self">Home Valuation</a></li>
         </ul>
     </div>

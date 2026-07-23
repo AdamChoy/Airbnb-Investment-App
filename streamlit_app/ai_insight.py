@@ -1,29 +1,29 @@
 """AI insight layer for InvestStay.
 
 Turns the already-computed, deterministic investment score (see
-add_investment_score in pages/5_Investment_Score.py) into a short plain-
+add_investment_score in pages/5_Property_Analysis.py) into a short plain-
 language write-up for the recommended area. The ranking itself stays
 rule-based and transparent; the LLM only narrates the numbers it's given,
 so it can't invent figures the app hasn't already computed.
 
 Until an API key is configured, generate_insight() falls back to a
 static templated paragraph — the app must never break in a demo just
-because ANTHROPIC_API_KEY isn't set.
+because OPENAI_API_KEY isn't set.
 """
 
 import os
 import streamlit as st
 
-MODEL = "claude-haiku-4-5"
+MODEL = "gpt-4o-mini"
 
 
 def _get_api_key():
-    # Prefer Streamlit secrets (st.secrets["ANTHROPIC_API_KEY"] in
+    # Prefer Streamlit secrets (st.secrets["OPENAI_API_KEY"] in
     # .streamlit/secrets.toml, never committed) over a plain env var.
     try:
-        return st.secrets["ANTHROPIC_API_KEY"]
+        return st.secrets["OPENAI_API_KEY"]
     except Exception:
-        return os.environ.get("ANTHROPIC_API_KEY")
+        return os.environ.get("OPENAI_API_KEY")
 
 
 def _static_fallback(area_name, city, budget, stats):
@@ -37,6 +37,21 @@ def _static_fallback(area_name, city, budget, stats):
     )
 
 
+# TODO: remove once OPENAI_API_KEY is configured — these two constants exist
+# purely so the AI-shaped UI (Recommendation card, Sentiment "AI Summary"
+# card) can be visually tested before a real key is wired in.
+_FILLER_INSIGHT = (
+    "🤖 *[AI filler — no OPENAI_API_KEY configured yet.]* This is a placeholder "
+    "investment insight standing in for the real AI-generated write-up, so the "
+    "layout and styling of this card can be checked before the key is added."
+)
+_FILLER_SUMMARY = (
+    "🤖 *[AI filler — no OPENAI_API_KEY configured yet.]* This is a placeholder "
+    "review summary standing in for the real AI-generated write-up, so the "
+    "layout and styling of this card can be checked before the key is added."
+)
+
+
 @st.cache_data(show_spinner=False)
 def generate_insight(area_name: str, city: str, budget: int, stats: dict) -> str:
     """Return a short (3-4 sentence) write-up explaining why `area_name`
@@ -48,12 +63,12 @@ def generate_insight(area_name: str, city: str, budget: int, stats: dict) -> str
     """
     api_key = _get_api_key()
     if not api_key:
-        return _static_fallback(area_name, city, budget, stats)
+        return _FILLER_INSIGHT
 
     try:
-        import anthropic
+        import openai
     except ImportError:
-        return _static_fallback(area_name, city, budget, stats)
+        return _FILLER_INSIGHT
 
     prompt = f"""You are writing a short investment insight for a property
 investment app. Using ONLY the figures below — do not invent any numbers —
@@ -71,13 +86,13 @@ Write for a first-time property investor. No headers, no bullet points,
 just the sentences."""
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
             model=MODEL,
             max_tokens=220,
             messages=[{"role": "user", "content": prompt}],
         )
-        return response.content[0].text.strip()
+        return response.choices[0].message.content.strip()
     except Exception:
         # Network/quota/API errors: never break the demo, just fall back.
         return _static_fallback(area_name, city, budget, stats)
@@ -99,12 +114,12 @@ def summarise_reviews(msoa_name: str, reviews: tuple[str, ...]) -> str | None:
 
     api_key = _get_api_key()
     if not api_key:
-        return None
+        return _FILLER_SUMMARY
 
     try:
-        import anthropic
+        import openai
     except ImportError:
-        return None
+        return _FILLER_SUMMARY
 
     review_block = "\n".join(f"- {r}" for r in reviews)
     prompt = f"""You are summarising guest reviews for a property investment app.
@@ -120,13 +135,13 @@ Reviews:
 No headers, no bullet points, just the summary sentences."""
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
-        response = client.messages.create(
+        client = openai.OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
             model=MODEL,
             max_tokens=180,
             messages=[{"role": "user", "content": prompt}],
         )
-        return response.content[0].text.strip()
+        return response.choices[0].message.content.strip()
     except Exception:
         # Network/quota/API errors: never break the demo, just fall back.
         return None

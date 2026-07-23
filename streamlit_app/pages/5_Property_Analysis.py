@@ -7,7 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from theme import TEAL, get_theme, inject_css, _get_logo_b64, render_navbar, render_stripes
+from theme import TEAL, get_theme, inject_css, _get_logo_b64, render_navbar
 from ai_insight import generate_insight
 
 st.set_page_config(page_title="Investment Score · InvestStay", layout="wide", initial_sidebar_state="collapsed")
@@ -34,15 +34,15 @@ msoa_geojson = load_msoa_geojson()
 # -----------------------------
 # CITY CARDS
 # -----------------------------
-def get_city_img_tag(city_name):
+def get_city_img_uri(city_name):
     for ext in (".jpg", ".jpeg", ".png", ".webp"):
         path = os.path.join(ASSETS_DIR, f"{city_name.lower()}{ext}")
         if os.path.exists(path):
             mime = "jpeg" if ext in (".jpg", ".jpeg") else ext.lstrip(".")
             with open(path, "rb") as f:
                 b64 = base64.b64encode(f.read()).decode()
-            return f'<img src="data:image/{mime};base64,{b64}" alt="{city_name}"/>'
-    return ""
+            return f"data:image/{mime};base64,{b64}"
+    return None
 
 CITIES = ["London", "Manchester", "Bristol"]
 
@@ -67,58 +67,11 @@ inject_css(extra_css=f"""
     color: {TEAL};
     margin-bottom: 10px;
 }}
-.cities-grid {{
-    display: grid;
-    grid-template-columns: repeat(3,1fr);
-    gap: 24px;
-    margin-bottom: 28px;
-}}
-.city-card.is-selected, .city-card:focus, .city-card:focus-visible {{
-    outline: none;
-    box-shadow: 0 0 0 3px {TEAL};
-}}
-.city-card {{
-    position: relative;
-    display: block;
-    height: 220px;
-    border-radius: 16px;
-    overflow: hidden;
-    text-decoration: none;
-    background: #1a1a1a;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-}}
-.city-card:hover {{
-    transform: translateY(-4px);
-    box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 28px 4px rgba(255,255,255,0.6), 0 10px 24px rgba(0,0,0,0.2);
-}}
-.city-card img {{
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}}
-.city-card-placeholder {{
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, #1B4F72, #10c87a);
-}}
-.city-card::after {{
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.65) 100%);
-}}
-.city-card-label {{
-    position: absolute;
-    left: 20px;
-    bottom: 16px;
-    z-index: 2;
-    color: #fff;
-    font-size: 1.3rem;
-    font-weight: 700;
-    letter-spacing: -0.02em;
+.profile-card-desc {{
+    font-size: 0.85rem;
+    line-height: 1.5;
+    color: {t['text_muted']};
+    margin-top: 8px;
 }}
 .table-card {{
     background: {t['card_bg']};
@@ -175,7 +128,7 @@ def normalise(series):
         return series * 0
     return ((series - series.min()) / (series.max() - series.min())) * 100
 
-def add_investment_score(df):
+def add_investment_score(df, weights):
     df = df.copy()
 
     df["revenue_score"] = normalise(df["str_annual_revenue_est"])
@@ -184,41 +137,66 @@ def add_investment_score(df):
     df["str_yield_score"] = normalise(df["str_gross_yield"])
     df["yield_gap_score"] = normalise(df["str_vs_ltr_yield_delta"])
     df["saturation_score"] = 100 - normalise(df["total_listings"])
+    df["review_score"] = normalise(df["avg_review_score"])
 
     df["investment_score"] = (
-        0.30 * df["revenue_score"]
-        + 0.25 * df["occupancy_score"]
-        + 0.25 * df["str_yield_score"]
-        + 0.10 * df["yield_gap_score"]
-        + 0.10 * df["saturation_score"]
+        weights["revenue"] * df["revenue_score"]
+        + weights["occupancy"] * df["occupancy_score"]
+        + weights["str_yield"] * df["str_yield_score"]
+        + weights["yield_gap"] * df["yield_gap_score"]
+        + weights["saturation"] * df["saturation_score"]
+        + weights["review"] * df["review_score"]
     ).round(1)
 
     return df
 
-lad_df = add_investment_score(lad_df)
-msoa_df = add_investment_score(msoa_df)
+# -----------------------------
+# INVESTOR PROFILES (each maps to a different investment_score weighting)
+# -----------------------------
+PROFILES = {
+    "yield": {
+        "label": "Yield Maximiser",
+        "sentence": "Weights short-term rental revenue and yield most heavily, prioritising the highest possible return.",
+        "weights": {"revenue": 0.40, "occupancy": 0.15, "str_yield": 0.30, "yield_gap": 0.05, "saturation": 0.05, "review": 0.05},
+    },
+    "occupancy": {
+        "label": "Occupancy Optimiser",
+        "sentence": "Weights booked-night occupancy most heavily, favouring consistently high demand over headline yield.",
+        "weights": {"revenue": 0.15, "occupancy": 0.45, "str_yield": 0.15, "yield_gap": 0.05, "saturation": 0.10, "review": 0.10},
+    },
+    "quality": {
+        "label": "Quality Host",
+        "sentence": "Weights guest review scores alongside yield, favouring areas where hosts maintain strong guest satisfaction.",
+        "weights": {"revenue": 0.20, "occupancy": 0.15, "str_yield": 0.15, "yield_gap": 0.05, "saturation": 0.10, "review": 0.35},
+    },
+}
+DEFAULT_PROFILE = "yield"
+
+selected_profile = st.session_state.get("global_profile_key")
+if selected_profile not in PROFILES:
+    selected_profile = DEFAULT_PROFILE
+
+st.session_state["global_profile_key"] = selected_profile
+profile = PROFILES[selected_profile]["label"]
+
+lad_df = add_investment_score(lad_df, PROFILES[selected_profile]["weights"])
+msoa_df = add_investment_score(msoa_df, PROFILES[selected_profile]["weights"])
 
 # -----------------------------
 # SESSION STATE
 # -----------------------------
 if "score_page" not in st.session_state:
-    # Jump straight to the Dashboard tab if we arrived via Home's "Analyse
-    # Investment" flow (city is set in session_state); otherwise land on Home.
-    st.session_state.score_page = "Dashboard" if "city" in st.session_state else "Home"
+    st.session_state.score_page = "Dashboard"
 
 # -----------------------------
-# CITY SELECTION (city cards toggle ?cities= on click, read back here)
+# CITY SELECTION (city cards write straight to session_state + st.rerun(),
+# so no other widget on the page loses its state — see the card buttons below)
 # -----------------------------
 city_options = sorted(lad_df["city"].dropna().str.title().unique())
 
 selected_cities = [c for c in st.session_state.get("global_cities", []) if c in city_options]
 if not selected_cities:
     selected_cities = [city_options[0]]
-
-qp_cities = [c.title() for c in st.query_params.get("cities", "").split(",") if c.strip()]
-qp_cities = [c for c in qp_cities if c in city_options]
-if qp_cities:
-    selected_cities = qp_cities
 
 st.session_state["global_cities"] = selected_cities
 cities = selected_cities
@@ -228,9 +206,13 @@ cities = selected_cities
 # -----------------------------
 lad_options = sorted(lad_df[lad_df["city"].str.title().isin(cities)]["lad_name"].dropna().unique())
 
-prev_lads = [l for l in st.session_state.get("global_lads", []) if l in lad_options]
-if st.session_state.get("global_lads_cities") != cities or not prev_lads:
+# Auto-select all LADs whenever the city selection changes (or on first load) —
+# but once that's happened, respect an explicit empty selection (e.g. from the
+# "Clear all" button below) instead of silently re-filling it.
+if "global_lads" not in st.session_state or st.session_state.get("global_lads_cities") != cities:
     prev_lads = lad_options
+else:
+    prev_lads = [l for l in st.session_state.get("global_lads", []) if l in lad_options]
 
 st.session_state["global_lads_cities"] = cities
 st.session_state["global_lads"] = prev_lads
@@ -246,25 +228,70 @@ with st.container():
 
     st.markdown("<div class='step-label'>1. Select your areas</div>", unsafe_allow_html=True)
 
-    def _toggle_href(name):
-        s = set(selected_cities)
-        if name in s:
-            if len(s) > 1:
-                s.discard(name)
-        else:
-            s.add(name)
-        return "?cities=" + ",".join(sorted(s))
+    city_css = ""
+    for name in CITIES:
+        uri = get_city_img_uri(name)
+        bg_img = f"url('{uri}')" if uri else "none"
+        bg_fallback = "#1a1a1a" if uri else "linear-gradient(135deg, #1B4F72, #10c87a)"
+        shadow = f"0 0 0 3px {TEAL}" if name in selected_cities else "0 2px 12px rgba(0,0,0,0.08)"
+        city_css += f"""
+        .st-key-city_{name} button {{
+            height: 220px !important; width: 100% !important; border: none !important;
+            border-radius: 16px !important;
+            background-image: linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.65) 100%), {bg_img} !important;
+            background-size: cover !important; background-position: center !important;
+            background-color: {bg_fallback} !important;
+            display: flex !important; align-items: flex-end !important; justify-content: flex-start !important;
+            padding: 16px 20px !important; color: #fff !important; font-size: 1.3rem !important;
+            font-weight: 700 !important; letter-spacing: -0.02em !important; text-align: left !important;
+            box-shadow: {shadow} !important;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }}
+        .st-key-city_{name} button:hover {{
+            transform: translateY(-4px);
+            box-shadow: 0 0 0 2px rgba(255,255,255,0.85), 0 0 28px 4px rgba(255,255,255,0.6), 0 10px 24px rgba(0,0,0,0.2) !important;
+        }}
+        """
+    st.markdown(f"<style>{city_css}</style>", unsafe_allow_html=True)
 
-    city_cards = "".join([
-        f'''<a class="city-card{" is-selected" if name in selected_cities else ""}" href="{_toggle_href(name)}" target="_self">
-            {get_city_img_tag(name) or '<div class="city-card-placeholder"></div>'}
-            <div class="city-card-label">{name}</div>
-        </a>'''
-        for name in CITIES
-    ])
-    st.markdown(f'<div class="cities-grid">{city_cards}</div>', unsafe_allow_html=True)
+    city_cols = st.columns(3)
+    for col, name in zip(city_cols, CITIES):
+        with col:
+            if st.button(name, key=f"city_{name}", use_container_width=True):
+                s = set(selected_cities)
+                if name in s:
+                    if len(s) > 1:
+                        s.discard(name)
+                else:
+                    s.add(name)
+                st.session_state["global_cities"] = sorted(s)
+                st.rerun()
 
-    st.markdown("<div class='step-label'>2. Local Authority Districts</div>", unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    .st-key-lads_select_all button, .st-key-lads_clear_all button {
+        background: transparent !important; color: %s !important; border: none !important;
+        box-shadow: none !important; padding: 0 !important; height: auto !important;
+        font-size: 0.78rem !important; font-weight: 600 !important; text-decoration: underline !important;
+    }
+    .st-key-lads_select_all button:hover, .st-key-lads_clear_all button:hover {
+        color: #0b7d73 !important; background: transparent !important;
+    }
+    </style>
+    """ % TEAL, unsafe_allow_html=True)
+
+    label_col, sel_col, clr_col = st.columns([8, 1.3, 1.3])
+    with label_col:
+        st.markdown("<div class='step-label'>2. Local Authority Districts</div>", unsafe_allow_html=True)
+    with sel_col:
+        if st.button("Select all", key="lads_select_all", use_container_width=True):
+            st.session_state["global_lads"] = lad_options
+            st.rerun()
+    with clr_col:
+        if st.button("Clear all", key="lads_clear_all", use_container_width=True):
+            st.session_state["global_lads"] = []
+            st.rerun()
+
     lads = st.multiselect(
         "Local Authority Districts",
         options=lad_options,
@@ -278,16 +305,8 @@ with st.container():
         key="global_budget_range", label_visibility="collapsed",
     )
 
-    st.markdown("<div class='step-label'>4. Investor profile</div>", unsafe_allow_html=True)
-    profile = st.selectbox(
-        "Investor Profile",
-        ["First-time investor", "Multi-property host"],
-        key="global_profile",
-        label_visibility="collapsed",
-    )
-
-    st.markdown("<div class='step-label'>5. Transport &amp; GP amenities</div>", unsafe_allow_html=True)
-    amen_col1, amen_col2 = st.columns(2)
+    st.markdown("<div class='step-label'>4. Transport &amp; local amenities</div>", unsafe_allow_html=True)
+    amen_col1, amen_col2, amen_col3 = st.columns(3)
     with amen_col1:
         transport_access = st.selectbox(
             "Transport access",
@@ -300,11 +319,41 @@ with st.container():
             0, int(msoa_df["gp_surgery_count"].max()), 0,
             key="global_min_gp",
         )
+    with amen_col3:
+        min_parks = st.slider(
+            "Minimum parks nearby",
+            0, int(msoa_df["total_parks_count"].max()), 0,
+            key="global_min_parks",
+        )
 
-    analyse = st.button("Analyse Investment")
+    st.markdown("<div class='step-label'>5. Investor profile</div>", unsafe_allow_html=True)
 
-    if analyse:
-        st.session_state.score_page = "Dashboard"
+    profile_css = ""
+    for key in PROFILES:
+        shadow = f"0 0 0 3px {TEAL}" if key == selected_profile else "0 2px 12px rgba(0,0,0,0.08)"
+        profile_css += f"""
+        .st-key-profile_{key} button {{
+            width: 100% !important; border: none !important; border-radius: 16px !important;
+            background: {t['card_bg']} !important; color: {t['text']} !important;
+            padding: 20px 22px !important; text-align: left !important; font-size: 1.05rem !important;
+            font-weight: 700 !important; white-space: normal !important;
+            box-shadow: {shadow} !important;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }}
+        .st-key-profile_{key} button:hover {{
+            transform: translateY(-4px);
+            box-shadow: 0 4px 18px rgba(0,0,0,0.12) !important;
+        }}
+        """
+    st.markdown(f"<style>{profile_css}</style>", unsafe_allow_html=True)
+
+    profile_cols = st.columns(3)
+    for col, (key, data) in zip(profile_cols, PROFILES.items()):
+        with col:
+            if st.button(data["label"], key=f"profile_{key}", use_container_width=True):
+                st.session_state["global_profile_key"] = key
+                st.rerun()
+            st.markdown(f"<div class='profile-card-desc'>{data['sentence']}</div>", unsafe_allow_html=True)
 
 # -----------------------------
 # SUITABLE MSOAS
@@ -321,9 +370,10 @@ if transport_access == "Within 15-min walk":
 elif transport_access == "Within 30-min walk":
     suitable_msoas = suitable_msoas[suitable_msoas["less_than_30_minute_walk"].fillna(0) > 0]
 suitable_msoas = suitable_msoas[suitable_msoas["gp_surgery_count"].fillna(0) >= min_gp]
+suitable_msoas = suitable_msoas[suitable_msoas["total_parks_count"].fillna(0) >= min_parks]
 suitable_msoas = suitable_msoas.sort_values("investment_score", ascending=False)
 
-st.markdown("<div class='step-label' style='margin-top:8px;'>Suitable areas</div>", unsafe_allow_html=True)
+st.markdown("<div class='step-label' style='margin-top:8px;margin-bottom:20px;'>Suitable areas</div>", unsafe_allow_html=True)
 
 if suitable_msoas.empty:
     st.warning(f"No areas in {', '.join(cities)} match your budget, transport and amenity filters. Try widening them.")
@@ -361,7 +411,7 @@ else:
 # -----------------------------
 # INVESTMENT SCORE MAP
 # -----------------------------
-st.markdown("<div class='step-label' style='margin-top:8px;'>Investment score by area</div>", unsafe_allow_html=True)
+st.markdown("<div class='step-label' style='margin-top:32px;'>Investment score by area</div>", unsafe_allow_html=True)
 
 map_msoas = msoa_df[
     msoa_df["city"].str.title().isin(cities) & msoa_df["lad_name"].isin(lads)
@@ -420,6 +470,8 @@ else:
             fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="rgba(0,0,0,0)", font_family="Inter")
             st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
 
+st.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
+
 # -----------------------------
 # FILTER DATA
 # -----------------------------
@@ -427,10 +479,11 @@ city_df = lad_df[
     lad_df["city"].str.title().isin(cities) & lad_df["lad_name"].isin(lads)
 ].copy()
 
-if "median_house_price_2025_lad" in city_df.columns:
-    city_df = city_df[
-        city_df["median_house_price_2025_lad"].between(budget_min, budget_max)
-    ]
+# Budget is a per-property figure, so it's applied at MSOA level (see
+# suitable_msoas above) rather than against a LAD's aggregate median price —
+# a LAD stays in play here as long as at least one of its MSOAs is in budget.
+budget_ok_lads = suitable_msoas["lad_name"].unique()
+city_df = city_df[city_df["lad_name"].isin(budget_ok_lads)]
 
 if city_df.empty:
     best_area = None
@@ -438,90 +491,36 @@ else:
     best_area = city_df.sort_values("investment_score", ascending=False).iloc[0]
 
 # -----------------------------
-# MAIN HEADER
-# -----------------------------
-st.markdown(
-    '<div class="main-title">Welcome to <span class="teal">InvestStay</span></div>',
-    unsafe_allow_html=True
-)
-
-st.write("Smart Data. Smart Investments.")
-render_stripes()
-
-# -----------------------------
 # MAIN PAGE NAVIGATION BUTTONS
 # -----------------------------
-nav1, nav2, nav3, nav4, nav5, nav6 = st.columns(6)
+nav1, nav2, nav3, nav4, nav5 = st.columns(5)
 
 with nav1:
-    if st.button("Home", key="score_nav_home"):
-        st.session_state.score_page = "Home"
-
-with nav2:
     if st.button("Dashboard", key="score_nav_dashboard"):
         st.session_state.score_page = "Dashboard"
 
-with nav3:
+with nav2:
     if st.button("Score Breakdown", key="score_nav_breakdown"):
         st.session_state.score_page = "Score Breakdown"
 
-with nav4:
+with nav3:
     if st.button("Compare Areas", key="score_nav_compare"):
         st.session_state.score_page = "Compare Areas"
 
-with nav5:
+with nav4:
     if st.button("Recommendation", key="score_nav_recommendation"):
         st.session_state.score_page = "Recommendation"
 
-with nav6:
+with nav5:
     if st.button("Risks", key="score_nav_risks"):
         st.session_state.score_page = "Risks"
 
 st.divider()
 
 # -----------------------------
-# HOME PAGE
-# -----------------------------
-if st.session_state.score_page == "Home":
-
-    st.subheader("Find the best area to invest in")
-
-    col1, col2 = st.columns([1.5, 1])
-
-    with col1:
-        st.markdown(
-            """
-            <div class="card">
-            <h3>What does this app do?</h3>
-            <p>
-            InvestStay helps property investors compare short-term rental income,
-            long-term rental yield, demand, market saturation and review quality.
-            </p>
-            <p>
-            Enter your search inputs on the left, then click Analyse Investment.
-            </p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-    with col2:
-        st.markdown(
-            f"""
-            <div class="card">
-            <h3>Your Search</h3>
-            <p><b>Areas:</b> {", ".join(cities)}</p>
-            <p><b>Budget:</b> £{budget_min:,} – £{budget_max:,}</p>
-            <p><b>Investor Type:</b> {profile}</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-
-# -----------------------------
 # DASHBOARD PAGE
 # -----------------------------
-elif st.session_state.score_page == "Dashboard":
+if st.session_state.score_page == "Dashboard":
 
     st.subheader("Investment Dashboard")
 
@@ -583,25 +582,28 @@ elif st.session_state.score_page == "Score Breakdown":
                 "Occupancy Score",
                 "STR Yield Score",
                 "Yield Gap Score",
-                "Saturation Score"
+                "Saturation Score",
+                "Review Score",
             ],
             "Score": [
                 best_area["revenue_score"],
                 best_area["occupancy_score"],
                 best_area["str_yield_score"],
                 best_area["yield_gap_score"],
-                best_area["saturation_score"]
+                best_area["saturation_score"],
+                best_area["review_score"],
             ]
         })
 
         st.bar_chart(breakdown.set_index("Metric"))
 
         st.markdown(
-            """
+            f"""
             <div class="card">
             <h3>How the score works</h3>
             <p>The investment score combines revenue, occupancy, short-term rental yield,
-            yield gap and market saturation into one overall score out of 100.</p>
+            yield gap, market saturation and guest review score into one overall score out
+            of 100. Your <b>{profile}</b> profile is currently selected: {PROFILES[selected_profile]['sentence']}</p>
             </div>
             """,
             unsafe_allow_html=True
@@ -925,3 +927,5 @@ but investors should balance expected returns against:
 A strong investment decision requires considering both
 financial performance and potential risks.
 """)
+
+st.markdown("<div style='height:48px;'></div>", unsafe_allow_html=True)

@@ -98,7 +98,7 @@ NAV_LINKS = [
     ("/Explore_Areas", "Explore"),
     ("/Yield_Analysis", "Yields"),
     ("/Sentiment", "Sentiment"),
-    ("/Investment_Score", "Score"),
+    ("/Property_Analysis", "Score"),
     ("/Home_Valuation", "Valuation"),
     ("/Data_Dictionary", "Data"),
     ("/How_It_Works", "How it works"),
@@ -124,7 +124,7 @@ def render_navbar(active=None):
     # rule and swallow the rest of the navbar HTML into a <pre> block — so an
     # HTML comment stands in for "no CTA" instead of an empty string.
     cta_html = (
-        '<a href="/Investment_Score" target="_self" class="nav-cta-btn">Analyse a property →</a>'
+        '<a href="/Property_Analysis" target="_self" class="nav-cta-btn">Analyse a property →</a>'
         if active != "Score" else "<!-- no CTA on the Score page -->"
     )
 

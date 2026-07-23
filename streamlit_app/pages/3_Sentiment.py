@@ -139,3 +139,5 @@ if "sample_reviews" in df.columns:
 
         for review in reviews:
             st.markdown(f"<div class='review-card'>{review}</div>", unsafe_allow_html=True)
+
+st.markdown("<div style='height:48px;'></div>", unsafe_allow_html=True)

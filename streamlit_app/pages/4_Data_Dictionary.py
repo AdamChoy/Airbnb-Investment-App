@@ -17,6 +17,40 @@ render_stripes()
 
 import pandas as pd
 
+SOURCES = [
+    ("Inside Airbnb", "Listing-level Airbnb data — prices, availability, reviews, room type — scraped and published independently of Airbnb.", "Listing aggregates"),
+    ("HM Land Registry", "Price Paid Data: every residential property transaction in England & Wales, used to derive median house prices and 10-year growth.", "House prices, growth"),
+    ("Office for National Statistics (ONS)", "Geography boundaries (MSOA/LAD), population estimates, and private rental market statistics.", "Geography, rents, population"),
+    ("OS OpenData", "Ordnance Survey's open datasets on parks and green/open spaces, aggregated to LAD level.", "Parks & open spaces"),
+    ("NHS Digital", "Register of GP practices in England, aggregated to count and per-capita figures by LAD.", "GP surgeries"),
+]
+
+st.markdown("<div class='section-header'>Data Sources</div>", unsafe_allow_html=True)
+st.markdown(
+    f"<p style='color:{MID};font-size:0.9rem;margin-bottom:16px;'>"
+    f"Every figure in this app traces back to one of the public sources below — nothing is estimated "
+    f"without a documented method (see <b>Derived Yield Columns</b> further down for the formulas)."
+    f"</p>",
+    unsafe_allow_html=True,
+)
+src_cols = st.columns(len(SOURCES))
+for col, (name, desc, powers) in zip(src_cols, SOURCES):
+    with col:
+        st.markdown(
+            f"""
+            <div style='background:{WHITE};border-radius:12px;padding:16px;height:100%;
+                 box-shadow:0 2px 8px rgba(0,0,0,0.06);'>
+                <div style='font-weight:700;color:{NAVY};font-size:0.9rem;margin-bottom:6px;'>{name}</div>
+                <div style='color:{MID};font-size:0.8rem;line-height:1.5;margin-bottom:10px;'>{desc}</div>
+                <div style='color:{TEAL};font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;'>Powers: {powers}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+st.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
+st.markdown("<div class='section-header'>Schema</div>", unsafe_allow_html=True)
+
 sections = {
     "Geography": [
         ("msoa_code",   "string",    "ONS",           "MSOA 2021 code e.g. E02000001"),
@@ -69,3 +103,5 @@ st.markdown(f"""
     GP, parks, and rent columns repeat the same LAD-level value across all MSOAs within a LAD.
 </div>
 """, unsafe_allow_html=True)
+
+st.markdown("<div style='height:48px;'></div>", unsafe_allow_html=True)
