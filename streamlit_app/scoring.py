@@ -32,7 +32,10 @@ DEFAULT_PROFILE = "yield"
 def normalise(series):
     if series.max() == series.min():
         return series * 0
-    return ((series - series.min()) / (series.max() - series.min())) * 100
+    scaled = ((series - series.min()) / (series.max() - series.min())) * 100
+    # A missing input (e.g. no reviews yet) shouldn't NaN out the whole
+    # weighted score for that row — treat it as the worst case instead.
+    return scaled.fillna(0)
 
 
 def add_investment_score(df, weights=None):

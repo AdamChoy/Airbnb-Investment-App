@@ -720,7 +720,7 @@ if lad_geojson:
     # were on. Don't reintroduce that split.
     map_df = add_investment_score(map_df, PROFILES[DEFAULT_PROFILE]["weights"])
     map_df["Investment Score"] = map_df["investment_score"]
-    map_df["Investment Rank"] = map_df["Investment Score"].rank(ascending=False, method="min").astype(int)
+    map_df["Investment Rank"] = map_df["Investment Score"].rank(ascending=False, method="min", na_option="bottom").astype(int)
     map_df["Estimated STR Revenue"] = map_df["str_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
     map_df["Estimated LTR Revenue"] = map_df["ltr_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
     map_df["Average Rating"] = map_df["avg_review_score"].round(2)
