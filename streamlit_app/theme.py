@@ -58,9 +58,18 @@ def inject_css(extra_css=""):
             box-shadow:0 2px 8px rgba(0,0,0,0.07); color:{t['text']};
         }}
         .review-card {{
-            background:{t['card_bg']}; border-radius:10px; padding:16px 20px;
-            box-shadow:0 2px 6px rgba(0,0,0,0.06); border-left:4px solid {TEAL};
-            margin-bottom:12px; font-size:0.9rem; color:{t['text_muted']};
+            background:{t['card_bg']}; border-radius:14px; padding:20px 22px;
+            box-shadow:0 2px 10px rgba(0,0,0,0.07); margin-bottom:20px;
+            font-size:0.95rem; line-height:1.6;
+            font-style:italic; color:{t['text']};
+        }}
+        .review-card::before {{
+            content:"\\201C"; font-style:normal; font-weight:800; color:{TEAL};
+            opacity:0.6; margin-right:2px;
+        }}
+        .review-card::after {{
+            content:"\\201D"; font-style:normal; font-weight:800; color:{TEAL};
+            opacity:0.6; margin-left:2px;
         }}
         .table-card {{
             background: {t['card_bg']};
@@ -84,19 +93,20 @@ def inject_css(extra_css=""):
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.1em;
-            color: {t['text']};
+            color: {t['text_muted']};
             margin-bottom: 10px;
         }}
         .stat-number {{
             font-weight: 800;
             color: {TEAL};
-            line-height: 1.1;
+            line-height: 1.05;
             white-space: nowrap;
         }}
         .stat-note {{
             font-size: 0.85rem;
+            font-style: italic;
             color: {t['text_muted']};
-            margin-top: 6px;
+            margin-top: 8px;
         }}
         .styled-table {{
             width: 100%;
@@ -163,7 +173,7 @@ def render_stat_card(label, value, note="", unit="", big=False, min_height=None)
     to keep a row of cards even) — left unset, a card sizes to its content.
     """
     t = get_theme()
-    number_size = "54px" if big else "clamp(1.5rem, 1.9vw, 2.1rem)"
+    number_size = "54px" if big else "clamp(1.7rem, 2.1vw, 2.3rem)"
     height_style = f"min-height:{min_height}px;" if min_height else ""
     unit_html = f'<span style="font-size:0.85rem;color:{t["text_muted"]};"> {unit}</span>' if unit else ""
     note_html = f'<div class="stat-note">{note}</div>' if note else ""
@@ -234,11 +244,11 @@ def render_stripes():
 
 
 NAV_LINKS = [
+    ("/Property_Analysis", "Invest"),
+    ("/Home_Valuation", "Valuation"),
+    ("/Sentiment", "Sentiment"),
     ("/Explore_Areas", "Explore"),
     ("/Yield_Analysis", "Yields"),
-    ("/Sentiment", "Sentiment"),
-    ("/Property_Analysis", "Score"),
-    ("/Home_Valuation", "Valuation"),
     ("/Data_Dictionary", "Data"),
     ("/How_It_Works", "How it Works"),
     ("/About_Us", "About Us"),
@@ -365,15 +375,15 @@ def render_navbar(active=None):
         st.toggle("🌙 Dark mode", key="dark_mode", label_visibility="visible")
 
     links_html = navbar_links_html(active)
-    # On the Score page itself, the navbar CTA would just link back to the
-    # page you're already on, duplicating the in-page "Analyse Investment"
+    # On the Invest page itself, the navbar CTA would just link back to
+    # the page you're already on, duplicating the in-page "Analyse Investment"
     # button that actually does something (jumps to the Dashboard tab).
     # An indented blank line here would satisfy Markdown's 4-space code-block
     # rule and swallow the rest of the navbar HTML into a <pre> block — so an
     # HTML comment stands in for "no CTA" instead of an empty string.
     cta_html = (
-        '<a href="/Property_Analysis" target="_self" class="nav-cta-btn">Analyse a property →</a>'
-        if active != "Score" else "<!-- no CTA on the Score page -->"
+        '<a href="/Property_Analysis" target="_self" class="nav-cta-btn">Analyse Properties →</a>'
+        if active != "Invest" else "<!-- no CTA on the Invest page -->"
     )
 
     st.markdown(f"""

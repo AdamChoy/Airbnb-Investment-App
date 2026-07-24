@@ -12,10 +12,13 @@ st.set_page_config(page_title="Home Valuation · InvestStay", page_icon="🏡", 
 
 t = get_theme()
 inject_css(extra_css=f"""
-.val-title {{ font-size: 2.25rem; font-weight: 800; margin-bottom: 4px; }}
+.val-title {{ font-size: 2.25rem; font-weight: 800; margin-bottom: 20px; }}
 .val-disclaimer {{
     background: {t['card_alt_bg']}; border-radius: 12px; padding: 16px 20px;
-    font-size: 0.85rem; color: {t['text_muted']}; margin-top: 24px;
+    font-size: 0.85rem; color: {t['text_muted']}; margin-top: 40px;
+}}
+[data-baseweb="select"] > div {{
+    border: 1.5px solid {TEAL} !important;
 }}
 """)
 NAVY = t["text"]; MID = t["text_muted"]; WHITE = t["card_bg"]
@@ -30,7 +33,7 @@ msoa_df = load_data()
 
 st.markdown("<div class='val-title'>Value Your <span style='color:" + TEAL + ";'>Home</span></div>", unsafe_allow_html=True)
 st.markdown(
-    f"<p style='color:{MID};margin-bottom:20px;'>An area-level estimate based on median transaction prices for your neighbourhood.</p>",
+    f"<p style='color:{MID};margin-bottom:24px;'>An area-level estimate based on median transaction prices for your neighbourhood.</p>",
     unsafe_allow_html=True,
 )
 
@@ -98,7 +101,7 @@ fig.add_trace(go.Scatter(
 ))
 fig.add_trace(go.Scatter(
     x=[2025, 2035], y=[area["median_house_price_2025"], value_2035],
-    mode="lines+markers", name="Projected", line=dict(color=TEAL, width=3, dash="dash"), marker=dict(size=8),
+    mode="lines+markers", name="Projected", line=dict(color="#94A3B8", width=3, dash="dash"), marker=dict(size=8),
 ))
 fig.update_layout(
     height=320, plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)",

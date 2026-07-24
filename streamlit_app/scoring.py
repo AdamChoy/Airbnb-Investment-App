@@ -13,16 +13,19 @@ PROFILES = {
     "yield": {
         "label": "High Yield",
         "sentence": "Weights short-term rental revenue and yield most heavily, prioritising the highest possible return.",
+        "persona": "High Yield is for investors chasing the strongest possible return and who don't mind a hands-off, numbers-first approach.",
         "weights": {"revenue": 0.40, "occupancy": 0.15, "str_yield": 0.30, "yield_gap": 0.05, "saturation": 0.05, "review": 0.05},
     },
     "occupancy": {
         "label": "High Occupancy",
         "sentence": "Weights booked-night occupancy most heavily, favouring consistently high demand over headline yield.",
+        "persona": "High Occupancy is for someone who is prepared to manage their Airbnb property frequently, keeping it consistently booked.",
         "weights": {"revenue": 0.15, "occupancy": 0.45, "str_yield": 0.15, "yield_gap": 0.05, "saturation": 0.10, "review": 0.10},
     },
     "quality": {
         "label": "Top Rated",
         "sentence": "Weights guest review scores alongside yield, favouring areas where hosts maintain strong guest satisfaction.",
+        "persona": "Top Rated is for hosts who want to build a strong reputation and prioritise guest experience over maximum profit.",
         "weights": {"revenue": 0.20, "occupancy": 0.15, "str_yield": 0.15, "yield_gap": 0.05, "saturation": 0.10, "review": 0.35},
     },
 }

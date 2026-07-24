@@ -23,7 +23,12 @@ def load_data():
 
 msoa_df, lad_df = load_data()
 
-st.markdown(f"<h2 style='color:{NAVY};font-weight:800;margin-bottom:4px;'>Yield Analysis</h2>", unsafe_allow_html=True)
+st.markdown(
+    f"<h2 style='color:{NAVY};font-weight:800;margin-bottom:4px;'>"
+    f"<span style='color:{TEAL};'>Yield</span> Analysis "
+    f"<span style='color:{MID};font-size:0.9rem;font-weight:600;'>(Work in Progress)</span></h2>",
+    unsafe_allow_html=True,
+)
 st.markdown(f"<p style='color:{MID};margin-bottom:24px;'>Compare STR and LTR gross yields across cities and neighbourhoods.</p>", unsafe_allow_html=True)
 
 cities = ["All"] + sorted(msoa_df["city"].dropna().str.title().unique().tolist())
@@ -98,3 +103,5 @@ fig3.update_layout(height=380, showlegend=False,
                    plot_bgcolor=WHITE, paper_bgcolor=WHITE)
 style_chart(fig3)
 st.plotly_chart(fig3, use_container_width=True)
+
+st.markdown("<div style='height:48px;'></div>", unsafe_allow_html=True)

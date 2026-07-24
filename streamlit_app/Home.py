@@ -655,7 +655,7 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
             Find your perfect property to invest in.
         </h1>
         <p class="hero-subheading">From raw data to real returns. Built on open data. Designed for smarter property investment.</p>
-        <a href="/Property_Analysis" target="_self" class="hero-cta-btn">Analyse a property →</a>
+        <a href="/Property_Analysis" target="_self" class="hero-cta-btn">Analyse Properties →</a>
     </div>
 </div>
 <div class="stripes">

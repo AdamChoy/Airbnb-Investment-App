@@ -41,12 +41,4 @@ st.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
 st.markdown("<div class='section-header'>The Pipeline Architecture</div>", unsafe_allow_html=True)
 st.image(os.path.join(os.path.dirname(__file__), "..", "assets", "pipeline_diagram.png"), use_container_width=True)
 
-st.markdown(f"""
-<div style='margin-top:32px;padding:16px;background:{WHITE};border-radius:10px;
-     border-left:4px solid {TEAL};color:{MID};font-size:0.85rem;'>
-    Every figure here is gross, not net — no mortgage, tax, void periods or management costs are modelled.
-    See the <a href="/Data_Dictionary" target="_self" style="color:{TEAL};">Data Dictionary</a> for exact column definitions and assumptions.
-</div>
-""", unsafe_allow_html=True)
-
 st.markdown("<div style='height:48px;'></div>", unsafe_allow_html=True)

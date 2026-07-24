@@ -28,7 +28,7 @@ def load_data():
 
 msoa_df = load_data()
 
-st.markdown(f"<h2 style='color:{NAVY};font-weight:800;margin-bottom:4px;'>Explore Areas</h2>", unsafe_allow_html=True)
+st.markdown(f"<h2 style='color:{NAVY};font-weight:800;margin-bottom:4px;'><span style='color:{TEAL};'>Explore</span> Areas</h2>", unsafe_allow_html=True)
 st.markdown(f"<p style='color:{MID};margin-bottom:24px;'>Filter and rank MSOAs by yield, price, transport, and sentiment.</p>", unsafe_allow_html=True)
 
 # ── Filters ───────────────────────────────────────────────────────────────────
@@ -136,3 +136,5 @@ st.download_button(
     file_name="investstay_filtered_msoa.csv",
     mime="text/csv",
 )
+
+st.markdown("<div style='height:48px;'></div>", unsafe_allow_html=True)

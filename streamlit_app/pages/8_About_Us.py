@@ -40,16 +40,17 @@ st.markdown("<div class='section-header'>The Team</div>", unsafe_allow_html=True
 st.markdown("<div style='height:16px;'></div>", unsafe_allow_html=True)
 
 LINKEDIN_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 24 24"><path d="M22.23 0H1.77C.79 0 0 .77 0 1.72v20.56C0 23.23.79 24 1.77 24h20.46c.98 0 1.77-.77 1.77-1.72V1.72C24 .77 23.21 0 22.23 0zM7.06 20.45H3.56V9h3.5v11.45zM5.31 7.43c-1.12 0-2.03-.92-2.03-2.05 0-1.13.91-2.05 2.03-2.05 1.12 0 2.03.92 2.03 2.05 0 1.13-.91 2.05-2.03 2.05zM20.45 20.45h-3.5v-5.57c0-1.33-.03-3.04-1.85-3.04-1.85 0-2.13 1.44-2.13 2.94v5.67h-3.5V9h3.36v1.56h.05c.47-.89 1.62-1.85 3.34-1.85 3.57 0 4.23 2.35 4.23 5.41v6.33z"/></svg>'
+EMAIL_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 5h18v14H3z"/><path d="m3 6 9 7 9-7"/></svg>'
 
 TEAM = [
-    ("Adam Choy",           "Data Engineer and Frontend Designer", "https://www.linkedin.com/in/adam-choy-b95715190/"),
-    ("Roisin Houchen",      "Data Analyst",                        "https://www.linkedin.com/in/roisin-houchen-aa4175313/"),
-    ("Tariq Ali",           "Data Analyst",                        "https://www.linkedin.com/in/tariq-ali-10l/"),
-    ("Thadsha Sivashanker", "Data Engineer",                       "https://www.linkedin.com/in/thadsha-sivashanker-877946243/"),
+    ("Adam Choy",           "Data Engineer and Frontend Designer", "https://www.linkedin.com/in/adam-choy-b95715190/", "agc.choy@gmail.com"),
+    ("Roisin Houchen",      "Data Analyst",                        "https://www.linkedin.com/in/roisin-houchen-aa4175313/", "roisinhmail@gmail.com"),
+    ("Tariq Ali",           "Data Analyst",                        "https://www.linkedin.com/in/tariq-ali-10l/", "tariq_10@hotmail.co.uk"),
+    ("Thadsha Sivashanker", "Data Engineer",                       "https://www.linkedin.com/in/thadsha-sivashanker-877946243/", "thadsha187@gmail.com"),
 ]
 
 cols = st.columns(4)
-for col, (name, role, url) in zip(cols, TEAM):
+for col, (name, role, url, email) in zip(cols, TEAM):
     initials = "".join(part[0] for part in name.split() if part)
     with col:
         st.markdown(
@@ -64,6 +65,11 @@ for col, (name, role, url) in zip(cols, TEAM):
                 <a href="{url}" target="_blank" style='color:{TEAL};text-decoration:none;
                    display:inline-flex;align-items:center;gap:6px;font-size:0.85rem;'>
                    {LINKEDIN_ICON} LinkedIn
+                </a>
+                <br/>
+                <a href="mailto:{email}" style='color:{TEAL};text-decoration:none;
+                   display:inline-flex;align-items:center;gap:6px;font-size:0.85rem;margin-top:6px;'>
+                   {EMAIL_ICON} {email}
                 </a>
             </div>
             """,
