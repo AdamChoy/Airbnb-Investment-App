@@ -16,12 +16,6 @@ def _get_logo_b64():
 
 
 def get_theme():
-    dark = st.session_state.get("dark_mode", False)
-    if dark:
-        return dict(
-            bg="#12181b", text="#f2ede4", text_muted="#93a0a3", border="#2a3336",
-            card_bg="#1b2226", card_alt_bg="#212a2e", card_alt_hover="#283236", sidebar_bg="#1b2226",
-        )
     return dict(
         bg="#F1F6F5", text="#1a1a1a", text_muted="#888", border="#D7E5E2",
         card_bg="#ffffff", card_alt_bg="#E3EEEC", card_alt_hover="#D8E8E5", sidebar_bg="#ffffff",
@@ -311,68 +305,12 @@ def navbar_shared_css(t):
         height: 58px;
         gap: 14px;
     }}
-    .settings-btn {{
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 38px;
-        height: 38px;
-        margin-top: auto;
-        margin-bottom: auto;
-        border-radius: 50%;
-        color: {t['text']};
-        background: {t['card_alt_bg']};
-        transition: transform 0.15s ease, background 0.15s ease;
-    }}
-    .settings-btn svg {{ width: 18px; height: 18px; }}
-    .settings-btn:hover {{ transform: rotate(45deg); background: {t['card_alt_hover']}; }}
     """
 
 
-def render_settings_toggle_script():
-    """Wire up click/tap toggling for the settings-gear dropdown, which
-    otherwise only opens on CSS :hover — meaning dark mode has no way to be
-    reached at all on a touchscreen (no hover event exists there). Must run
-    via components.html: it renders in its own iframe, so unlike a plain
-    onclick="..." attribute inside st.markdown(unsafe_allow_html=True)
-    (which Streamlit's HTML sanitizer silently strips), this actually
-    executes and can reach into the parent document to bind a real
-    listener. Call this once per page, anywhere after the navbar markup."""
-    components.html("""
-    <script>
-    (function() {
-        var doc = window.parent.document;
-        function bind(attemptsLeft) {
-            var btn = doc.querySelector('.settings-btn');
-            if (!btn) {
-                if (attemptsLeft > 0) setTimeout(function() { bind(attemptsLeft - 1); }, 300);
-                return;
-            }
-            if (btn.dataset.toggleBound) return;
-            btn.dataset.toggleBound = "1";
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                doc.body.classList.toggle('settings-open');
-            });
-            doc.addEventListener('click', function(e) {
-                var menu = doc.querySelector('.st-key-settings_menu');
-                if (menu && !menu.contains(e.target) && !btn.contains(e.target)) {
-                    doc.body.classList.remove('settings-open');
-                }
-            });
-        }
-        bind(20);
-    })();
-    </script>
-    """, height=0)
-
-
 def render_navbar(active=None):
-    """Top navbar (logo, links, CTA, settings dropdown) used on every page instead of the native sidebar."""
+    """Top navbar (logo, links, CTA) used on every page instead of the native sidebar."""
     t = get_theme()
-
-    with st.container(key="settings_menu"):
-        st.toggle("🌙 Dark mode", key="dark_mode", label_visibility="visible")
 
     links_html = navbar_links_html(active)
     # On the Invest page itself, the navbar CTA would just link back to
@@ -452,35 +390,6 @@ def render_navbar(active=None):
         background: #0b7a70;
         transform: translateY(-1px);
     }}
-    .st-key-settings_menu {{
-        position: fixed;
-        top: 46px;
-        right: 254px;
-        z-index: 1000;
-        background: {t['card_bg']};
-        padding: 14px 18px;
-        border-radius: 12px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.14);
-        width: auto !important;
-        opacity: 0;
-        visibility: hidden;
-        transform: translateY(-6px);
-        transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
-        pointer-events: none;
-    }}
-    body:has(.settings-btn:hover) .st-key-settings_menu,
-    body.settings-open .st-key-settings_menu,
-    .st-key-settings_menu:hover {{
-        opacity: 1;
-        visibility: visible;
-        transform: translateY(0);
-        pointer-events: auto;
-    }}
-    .st-key-settings_menu label p {{
-        color: {t['text']} !important;
-        font-family: 'Inter', sans-serif;
-        font-size: 0.85rem !important;
-    }}
     </style>
 
     <div class="navbar">
@@ -489,18 +398,10 @@ def render_navbar(active=None):
             <ul class="nav-links">{links_html}</ul>
         </div>
         <div class="navbar-right">
-            <a href="#" onclick="return false;" class="settings-btn" title="Settings" aria-label="Settings" aria-haspopup="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                </svg>
-            </a>
             {cta_html}
         </div>
     </div>
     """, unsafe_allow_html=True)
-
-    render_settings_toggle_script()
 
 
 def render_sidebar_branding():

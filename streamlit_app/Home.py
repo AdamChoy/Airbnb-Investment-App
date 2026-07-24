@@ -5,33 +5,21 @@ import json
 import os
 import base64
 import plotly.express as px
-from theme import TEAL, style_chart, navbar_shared_css, navbar_links_html, render_settings_toggle_script
+from theme import TEAL, style_chart, navbar_shared_css, navbar_links_html
 from scoring import PROFILES, DEFAULT_PROFILE, add_investment_score
 
 st.set_page_config(
     page_title="InvestStay",
     page_icon="🏙️",
     layout="wide",
-    initial_sidebar_state="collapsed",  
+    initial_sidebar_state="collapsed",
 )
 
-
-# ── Settings menu (dark mode) ────────────────────────────────────────────────
-with st.container(key="settings_menu"):
-    dark_mode = st.toggle("🌙 Dark mode", key="dark_mode", label_visibility="visible")
-
-if dark_mode:
-    THEME = dict(
-        bg="#12181b", text="#f2ede4", text_muted="#93a0a3", border="#2a3336",
-        card_bg="#1b2226", card_alt_bg="#212a2e", card_alt_hover="#283236",
-        table_row_alt="#1f272b",
-    )
-else:
-    THEME = dict(
-        bg="#F1F6F5", text="#1a1a1a", text_muted="#888", border="#D7E5E2",
-        card_bg="#ffffff", card_alt_bg="#E3EEEC", card_alt_hover="#D8E8E5",
-        table_row_alt="#EDF5F3",
-    )
+THEME = dict(
+    bg="#F1F6F5", text="#1a1a1a", text_muted="#888", border="#D7E5E2",
+    card_bg="#ffffff", card_alt_bg="#E3EEEC", card_alt_hover="#D8E8E5",
+    table_row_alt="#EDF5F3",
+)
 
 theme_vars_css = f""":root {{
     --bg: {THEME['bg']};
@@ -222,43 +210,6 @@ html, body,
     gap: 0 !important;
 }}
 
-.st-key-settings_menu {{
-    position: fixed;
-    top: 46px;
-    right: 48px;
-    z-index: 1200;
-    background: var(--card-bg);
-    padding: 14px 18px;
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.14);
-    width: auto !important;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(-6px);
-    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
-    pointer-events: none;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-}}
-body:has(.settings-btn:hover) .st-key-settings_menu,
-body.settings-open .st-key-settings_menu,
-.st-key-settings_menu:hover {{
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-    pointer-events: auto;
-}}
-.st-key-settings_menu label p {{
-    color: var(--text) !important;
-    font-family: 'Inter', sans-serif;
-    font-size: 0.85rem !important;
-}}
-.st-key-settings_menu [data-testid="stToggle"] [role="switch"][aria-checked="true"],
-.st-key-settings_menu [data-testid="stToggle"] div[data-baseweb="toggle"][aria-checked="true"] {{
-    background-color: #0D9488 !important;
-    border-color: #0D9488 !important;
-}}
 
 #MainMenu, footer, header,
 [data-testid="stHeader"],
@@ -637,14 +588,6 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
         <a href="/" target="_self" class="navbar-logo-link">{navbar_logo_img if navbar_logo_img else '<span style="font-size:1.4rem;font-weight:900;letter-spacing:-0.05em;">IS</span>'}</a>
         <ul class="nav-links">{navbar_links_html()}</ul>
     </div>
-    <div class="navbar-right">
-        <a href="#" onclick="return false;" class="settings-btn" title="Settings" aria-label="Settings" aria-haspopup="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="3"/>
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-        </a>
-    </div>
 </div>
 
 <!-- ═══ HERO CARD ═══ -->
@@ -677,8 +620,6 @@ body:has(#section-footer:target) .side-rail a[href="#section-home"] {{
     </div>
 </div>
 """, unsafe_allow_html=True)
-
-render_settings_toggle_script()
 
 components.html("""
 <script>
