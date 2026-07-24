@@ -195,6 +195,9 @@ inject_css(extra_css=f"""
 .st-key-analyse_investment button:hover {{
     background-color: #0b7d73 !important; color: white !important;
 }}
+.st-key-global_granularity [role="radiogroup"] label p {{
+    color: #000 !important;
+}}
 """)
 render_navbar(active="Invest")
 

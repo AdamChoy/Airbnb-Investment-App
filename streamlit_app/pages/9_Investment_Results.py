@@ -115,6 +115,9 @@ inject_css(extra_css=f"""
 .st-key-dashboard_border {{
     border: 2px solid #000; border-radius: 16px; padding: 28px 32px;
 }}
+.st-key-dashboard_border, .st-key-dashboard_border * {{
+    color: #000 !important;
+}}
 """)
 render_navbar(active="Invest")
 

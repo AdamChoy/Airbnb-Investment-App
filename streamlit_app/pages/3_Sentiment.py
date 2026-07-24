@@ -18,8 +18,15 @@ t = inject_css(extra_css=f"""
 .st-key-sentiment_area_select [data-baseweb="select"] > div {{
     border: 1.5px solid {TEAL} !important;
 }}
+.st-key-sentiment_area_select [data-baseweb="select"] * {{
+    color: #000 !important;
+}}
 .st-key-global_city_filter [data-baseweb="select"] > div {{
     border: 1.5px solid {TEAL} !important;
+}}
+.st-key-sentiment_area_level [data-testid="stWidgetLabel"] p,
+.st-key-sentiment_area_level [role="radiogroup"] label p {{
+    color: #000 !important;
 }}
 """)
 NAVY = t["text"]; LIGHT = t["bg"]; WHITE = t["card_bg"]; MID = t["text_muted"]
