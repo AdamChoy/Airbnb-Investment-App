@@ -241,12 +241,19 @@ with st.container():
         key="global_lads",
         label_visibility="collapsed",
     )
+    # Widget-owned session_state keys (like global_lads above) get purged by
+    # Streamlit once their widget stops being instantiated — which happens
+    # the moment we're no longer on this page. The results page can't read
+    # global_lads directly, so mirror it into a plain, non-widget-owned key
+    # that survives the navigation. Same story for every widget below.
+    st.session_state["persist_lads"] = lads
 
     st.markdown("<div class='step-label'>3. Choose your investment budget (£)</div>", unsafe_allow_html=True)
     budget_min, budget_max = st.slider(
         "Choose your investment budget (£)", 50000, 1000000, value=(50000, 300000), step=10000,
         key="global_budget_range", label_visibility="collapsed",
     )
+    st.session_state["persist_budget_range"] = (budget_min, budget_max)
 
     st.markdown("<div class='step-label'>4. Decide Transport &amp; local amenities</div>", unsafe_allow_html=True)
     amen_col1, amen_col2, amen_col3 = st.columns(3)
@@ -256,22 +263,25 @@ with st.container():
             ["Any", "Within 15-min walk", "Within 30-min walk"],
             key="global_transport",
         )
+        st.session_state["persist_transport"] = transport_access
     with amen_col2:
         min_gp = st.slider(
             "Minimum GP surgeries nearby",
             0, int(msoa_df["gp_surgery_count"].max()), 0,
             key="global_min_gp",
         )
+        st.session_state["persist_min_gp"] = min_gp
     with amen_col3:
         min_parks = st.slider(
             "Minimum parks nearby",
             0, int(msoa_df["total_parks_count"].max()), 0,
             key="global_min_parks",
         )
+        st.session_state["persist_min_parks"] = min_parks
 
     st.markdown("<div class='step-label'>5. Determine Investor profile</div>", unsafe_allow_html=True)
 
-    profile_cols = st.columns(3)
+    profile_cols = st.columns(len(PROFILES))
     for col, (key, data) in zip(profile_cols, PROFILES.items()):
         with col:
             if st.button(data["label"], key=f"profile_{key}", use_container_width=True):
@@ -279,6 +289,14 @@ with st.container():
                 st.rerun()
             st.markdown(f"<div class='profile-card-desc'>{data['sentence']}</div>", unsafe_allow_html=True)
             st.markdown(f"<div class='profile-card-persona'>{data['persona']}</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='step-label'>6. Recommendation granularity</div>", unsafe_allow_html=True)
+    granularity = st.radio(
+        "Recommendation granularity",
+        ["City", "Local Authority District (LAD)", "Neighbourhood (MSOA)"],
+        index=1, key="global_granularity", horizontal=True, label_visibility="collapsed",
+    )
+    st.session_state["persist_granularity"] = granularity
 
     st.markdown("<div style='height:12px;'></div>", unsafe_allow_html=True)
     if not lads:

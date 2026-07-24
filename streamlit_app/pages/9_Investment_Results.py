@@ -21,6 +21,12 @@ lad_df = pd.read_csv(os.path.join(DATA_DIR, "lad_investment_summary.csv"))
 msoa_df = pd.read_csv(os.path.join(DATA_DIR, "msoa_investment_summary.csv"))
 lad_df = lad_df[lad_df["city"].isin(["london", "manchester", "bristol"])].copy()
 
+# lad_investment_summary.csv has no house-price-growth column (only MSOA-level
+# data does) — derive a LAD figure as the median of its MSOAs' 10yr growth,
+# so the Dashboard can show it alongside median house price.
+lad_price_growth = msoa_df.groupby("lad_name")["price_growth_10yr"].median().rename("price_growth_10yr_lad")
+lad_df = lad_df.merge(lad_price_growth, on="lad_name", how="left")
+
 @st.cache_data
 def load_msoa_geojson():
     path = os.path.join(DATA_DIR, "msoa_boundaries_filtered.geojson")
@@ -53,11 +59,17 @@ if "score_page" not in st.session_state:
 # no inputs of its own; go back to /Property_Analysis to change them)
 # -----------------------------
 cities = st.session_state.get("global_cities", [])
-lads = st.session_state.get("global_lads", [])
-budget_min, budget_max = st.session_state.get("global_budget_range", (50000, 300000))
-transport_access = st.session_state.get("global_transport", "Any")
-min_gp = st.session_state.get("global_min_gp", 0)
-min_parks = st.session_state.get("global_min_parks", 0)
+# global_lads/global_budget_range/etc. are owned by their st.slider/
+# st.multiselect/st.selectbox widgets on the Invest page — Streamlit purges
+# widget-owned session_state once that widget isn't instantiated (i.e. as
+# soon as we're not on that page), so this page reads the plain "persist_*"
+# copies the Invest page mirrors them into instead. See the comment there.
+lads = st.session_state.get("persist_lads", [])
+budget_min, budget_max = st.session_state.get("persist_budget_range", (50000, 300000))
+transport_access = st.session_state.get("persist_transport", "Any")
+min_gp = st.session_state.get("persist_min_gp", 0)
+min_parks = st.session_state.get("persist_min_parks", 0)
+granularity = st.session_state.get("persist_granularity", "Local Authority District (LAD)")
 
 t = get_theme()
 inject_css(extra_css=f"""
@@ -70,6 +82,7 @@ inject_css(extra_css=f"""
    stElementContainer wrapping the button, not on the button/stButton div
    itself — the descendant selector below still reaches the <button> fine.) */
 .st-key-score_nav_dashboard button,
+.st-key-score_nav_map button,
 .st-key-score_nav_breakdown button,
 .st-key-score_nav_compare button,
 .st-key-score_nav_recommendation button,
@@ -78,6 +91,7 @@ inject_css(extra_css=f"""
     border-radius: 12px; padding: 0.7rem 1.2rem; font-weight: 600;
 }}
 .st-key-score_nav_dashboard button:hover,
+.st-key-score_nav_map button:hover,
 .st-key-score_nav_breakdown button:hover,
 .st-key-score_nav_compare button:hover,
 .st-key-score_nav_recommendation button:hover,
@@ -98,6 +112,9 @@ inject_css(extra_css=f"""
 .st-key-edit_search button:hover {{
     color: #0b7d73 !important; background: transparent !important;
 }}
+.st-key-dashboard_border {{
+    border: 2px solid #000; border-radius: 16px; padding: 28px 32px;
+}}
 """)
 render_navbar(active="Invest")
 
@@ -115,7 +132,7 @@ if not cities or not lads:
         st.switch_page("pages/5_Property_Analysis.py")
     st.stop()
 
-top_row1, top_row2 = st.columns([5, 1.3])
+top_row1, top_row2 = st.columns([5, 1.3], vertical_alignment="center")
 with top_row1:
     st.markdown(
         '<div class="main-title" style="margin-bottom:4px;">Investment <span class="teal">Results</span></div>',
@@ -123,15 +140,14 @@ with top_row1:
     )
     st.markdown(
         f"<p style='color:{t['text_muted']};margin-bottom:0;'>"
-        f"{', '.join(cities)}  ·  £{budget_min:,}–£{budget_max:,}  ·  {profile} profile</p>",
+        f"{', '.join(cities)}  ·  £{budget_min:,}–£{budget_max:,}  ·  {profile} profile  ·  {granularity} recommendation</p>",
         unsafe_allow_html=True,
     )
 with top_row2:
-    st.markdown("<div style='height:22px;'></div>", unsafe_allow_html=True)
     if st.button("← Edit search", key="edit_search", use_container_width=True):
         st.switch_page("pages/5_Property_Analysis.py")
 
-st.markdown("<div style='height:16px;'></div>", unsafe_allow_html=True)
+st.markdown("<div style='height:56px;'></div>", unsafe_allow_html=True)
 
 # -----------------------------
 # SUITABLE MSOAS
@@ -151,97 +167,16 @@ suitable_msoas = suitable_msoas[suitable_msoas["gp_surgery_count"].fillna(0) >= 
 suitable_msoas = suitable_msoas[suitable_msoas["total_parks_count"].fillna(0) >= min_parks]
 suitable_msoas = suitable_msoas.sort_values("investment_score", ascending=False)
 
-st.markdown("<div class='step-label' style='margin-top:24px;margin-bottom:20px;'>Suitable neighbourhoods (MSOA)</div>", unsafe_allow_html=True)
-
-if suitable_msoas.empty:
-    st.warning(f"No areas in {', '.join(cities)} match your budget, transport and amenity filters. Try widening them.")
-else:
-    msoa_table = suitable_msoas[
-        ["msoa_name", "city", "lad_name", "median_house_price_2025",
-         "str_gross_yield", "ltr_gross_yield", "investment_score"]
-    ].copy()
-    msoa_table["city"] = msoa_table["city"].str.title()
-    msoa_table["median_house_price_2025"] = msoa_table["median_house_price_2025"].apply(lambda x: f"£{x:,.0f}")
-    msoa_table["str_gross_yield"] = (msoa_table["str_gross_yield"] * 100).round(2).astype(str) + "%"
-    msoa_table["ltr_gross_yield"] = (msoa_table["ltr_gross_yield"] * 100).round(2).astype(str) + "%"
-    msoa_table["investment_score"] = suitable_msoas["investment_score"].round(1)
-    msoa_table.columns = [
-        "MSOA", "City", "Local Authority District", "House Price",
-        "Short-Term Rental Yield", "Long-Term Rental Yield", "Investment Score",
-    ]
-
-    render_styled_table(msoa_table, highlight_cols=["Investment Score"])
-
 # -----------------------------
-# INVESTMENT SCORE MAP
+# FILTER DATA + RECOMMENDATION GRANULARITY
 # -----------------------------
-st.markdown("<div class='step-label' style='margin-top:32px;'>Investment score by area</div>", unsafe_allow_html=True)
-
-map_msoas = msoa_df[
-    msoa_df["city"].str.title().isin(cities) & msoa_df["lad_name"].isin(lads)
-].copy()
-
-if msoa_geojson is None or map_msoas.empty:
-    st.info("No map data available for the selected areas.")
-else:
-    map_codes = set(map_msoas["msoa_code"])
-    filtered_geojson = {
-        "type": "FeatureCollection",
-        "features": [
-            f for f in msoa_geojson["features"]
-            if f["properties"].get("MSOA21CD") in map_codes
-        ],
-    }
-
-    visible_cities = [c for c in cities if not map_msoas[map_msoas["city"].str.title() == c].empty]
-    map_cols = st.columns(len(visible_cities)) if visible_cities else []
-
-    for col, city_name in zip(map_cols, visible_cities):
-        city_map_df = map_msoas[map_msoas["city"].str.title() == city_name]
-
-        city_codes = set(city_map_df["msoa_code"])
-        coords = [
-            (f["properties"]["LAT"], f["properties"]["LONG"])
-            for f in filtered_geojson["features"]
-            if f["properties"].get("MSOA21CD") in city_codes
-            and "LAT" in f["properties"] and "LONG" in f["properties"]
-        ]
-        center = (
-            {"lat": sum(c[0] for c in coords) / len(coords), "lon": sum(c[1] for c in coords) / len(coords)}
-            if coords else {"lat": 52.5, "lon": -1.5}
-        )
-
-        with col:
-            st.markdown(f"<p style='font-weight:600;margin-bottom:8px;'>{city_name}</p>", unsafe_allow_html=True)
-
-            fig = px.choropleth_map(
-                city_map_df,
-                geojson=filtered_geojson,
-                locations="msoa_code",
-                featureidkey="properties.MSOA21CD",
-                color="investment_score",
-                color_continuous_scale=[[0, "#E3EEEC"], [1, TEAL]],
-                hover_name="msoa_name",
-                hover_data={"msoa_code": False, "investment_score": ":.1f"},
-                labels={"investment_score": "Investment Score"},
-                map_style="carto-positron",
-                center=center,
-                zoom=9.3,
-                opacity=0.85,
-                height=460,
-            )
-            fig.update_traces(marker_line_width=1, marker_line_color="#ffffff")
-            fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), paper_bgcolor="rgba(0,0,0,0)")
-            style_chart(fig)
-            fig.update_layout(coloraxis_colorbar=dict(title_font_color="#1a1a1a", tickfont_color="#1a1a1a"))
-            st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
-
-st.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
-
-# -----------------------------
-# FILTER DATA
-# -----------------------------
-city_df = lad_df[
+# granularity (read above) decides what unit "best_area" and every tab
+# below recommend. MSOA already has a ready-made, fully filtered, fully
+# scored dataframe (suitable_msoas). LAD is the original city_df logic.
+# City has no ready-made dataset, so it's built by aggregating the
+# LAD-level rows up to city level and re-running the same scoring
+# function on that.
+lad_scope_df = lad_df[
     lad_df["city"].str.title().isin(cities) & lad_df["lad_name"].isin(lads)
 ].copy()
 
@@ -249,36 +184,80 @@ city_df = lad_df[
 # suitable_msoas above) rather than against a LAD's aggregate median price —
 # a LAD stays in play here as long as at least one of its MSOAs is in budget.
 budget_ok_lads = suitable_msoas["lad_name"].unique()
-city_df = city_df[city_df["lad_name"].isin(budget_ok_lads)]
+lad_scope_df = lad_scope_df[lad_scope_df["lad_name"].isin(budget_ok_lads)]
+lad_scope_df = lad_scope_df.rename(columns={
+    "median_house_price_2025_lad": "median_house_price",
+    "price_growth_10yr_lad": "price_growth_10yr",
+})
 
-if city_df.empty:
+if granularity == "Neighbourhood (MSOA)":
+    area_df = suitable_msoas.rename(columns={"median_house_price_2025": "median_house_price"}).copy()
+    name_col = "msoa_name"
+    area_word = "neighbourhood"
+elif granularity == "City":
+    if lad_scope_df.empty:
+        area_df = lad_scope_df.copy()
+    else:
+        agg_spec = {
+            "total_listings": "sum",
+            "avg_nightly_price": "mean",
+            "median_nightly_price": "mean",
+            "avg_review_score": "mean",
+            "avg_availability_365": "mean",
+            "median_house_price": "mean",
+            "price_growth_10yr": "mean",
+            "median_monthly_rent": "mean",
+            "str_annual_revenue_est": "mean",
+            "str_gross_yield": "mean",
+            "ltr_annual_revenue_est": "mean",
+            "ltr_gross_yield": "mean",
+            "str_vs_ltr_yield_delta": "mean",
+        }
+        agg_spec = {k: v for k, v in agg_spec.items() if k in lad_scope_df.columns}
+        city_agg = lad_scope_df.groupby("city", as_index=False).agg(agg_spec)
+        area_df = add_investment_score(city_agg, PROFILES[selected_profile]["weights"])
+        area_df["city"] = area_df["city"].str.title()
+    name_col = "city"
+    area_word = "city"
+else:
+    area_df = lad_scope_df
+    name_col = "lad_name"
+    area_word = "district"
+
+name_col_label = {"msoa_name": "MSOA", "lad_name": "Local Authority District", "city": "City"}[name_col]
+
+if area_df.empty:
     best_area = None
 else:
-    best_area = city_df.sort_values("investment_score", ascending=False).iloc[0]
+    best_area = area_df.sort_values("investment_score", ascending=False).iloc[0]
 
 # -----------------------------
 # MAIN PAGE NAVIGATION BUTTONS
 # -----------------------------
-nav1, nav2, nav3, nav4, nav5 = st.columns(5)
+nav1, nav2, nav3, nav4, nav5, nav6 = st.columns(6)
 
 with nav1:
-    if st.button("Dashboard", key="score_nav_dashboard"):
+    if st.button("Dashboard", key="score_nav_dashboard", use_container_width=True):
         st.session_state.score_page = "Dashboard"
 
 with nav2:
-    if st.button("Score Breakdown", key="score_nav_breakdown"):
-        st.session_state.score_page = "Score Breakdown"
+    if st.button("Map", key="score_nav_map", use_container_width=True):
+        st.session_state.score_page = "Map"
 
 with nav3:
-    if st.button("Compare Areas", key="score_nav_compare"):
-        st.session_state.score_page = "Compare Areas"
+    if st.button("Score Breakdown", key="score_nav_breakdown", use_container_width=True):
+        st.session_state.score_page = "Score Breakdown"
 
 with nav4:
-    if st.button("Recommendation", key="score_nav_recommendation"):
-        st.session_state.score_page = "Recommendation"
+    if st.button("Compare Areas", key="score_nav_compare", use_container_width=True):
+        st.session_state.score_page = "Compare Areas"
 
 with nav5:
-    if st.button("Risks", key="score_nav_risks"):
+    if st.button("Recommendation", key="score_nav_recommendation", use_container_width=True):
+        st.session_state.score_page = "Recommendation"
+
+with nav6:
+    if st.button("Risks", key="score_nav_risks", use_container_width=True):
         st.session_state.score_page = "Risks"
 
 st.divider()
@@ -288,38 +267,156 @@ st.divider()
 # -----------------------------
 if st.session_state.score_page == "Dashboard":
 
-    st.subheader("Investment Dashboard")
+    st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
 
-    if best_area is None:
-        st.warning("No data available.")
+    with st.container(key="dashboard_border"):
+        st.subheader("Investment Dashboard")
+
+        if best_area is None:
+            st.warning("No data available.")
+        else:
+            col1, col2, col3 = st.columns(3, gap="large")
+
+            with col1:
+                render_stat_card(
+                    "Investment Score", best_area["investment_score"], unit="/ 100", big=True,
+                    note=f"A weighted blend of revenue, occupancy, yield, saturation and reviews, tuned to your {profile} profile — see Score Breakdown for the full formula.",
+                )
+
+            with col2:
+                st.metric(f"Recommended {name_col_label}", best_area[name_col])
+                st.markdown("<div style='height:16px;'></div>", unsafe_allow_html=True)
+                st.metric("Short-Term Rental (STR) Yield", f"{best_area['str_gross_yield']:.2%}")
+
+            with col3:
+                st.metric("Long-Term Rental (LTR) Yield", f"{best_area['ltr_gross_yield']:.2%}")
+                st.markdown("<div style='height:16px;'></div>", unsafe_allow_html=True)
+                st.metric("Estimated STR Revenue", f"£{best_area['str_annual_revenue_est']:,.0f}")
+
+            st.markdown("<div style='height:32px;'></div>", unsafe_allow_html=True)
+            col4, col5, col6, col7 = st.columns(4, gap="large")
+
+            with col4:
+                st.metric("Median House Price", f"£{best_area['median_house_price']:,.0f}")
+
+            with col5:
+                growth = best_area["price_growth_10yr"]
+                st.metric("House Price Growth (10yr)", f"{growth:+.1%}" if pd.notna(growth) else "N/A")
+
+            with col6:
+                st.metric("Estimated LTR Revenue", f"£{best_area['ltr_annual_revenue_est']:,.0f}")
+
+            with col7:
+                st.metric("Market Saturation", f"{best_area['saturation_score']:.0f} / 100")
+
+            st.subheader(f"Top 5 {name_col_label}s" if name_col != "city" else "Top 5 Cities")
+
+            top5 = area_df.sort_values("investment_score", ascending=False).head(5)[
+                [name_col, "investment_score", "str_gross_yield", "ltr_gross_yield",
+                 "str_annual_revenue_est", "total_listings"]
+            ].copy()
+            top5["investment_score"] = top5["investment_score"].round(1)
+            top5["str_gross_yield"] = (top5["str_gross_yield"] * 100).round(2).astype(str) + "%"
+            top5["ltr_gross_yield"] = (top5["ltr_gross_yield"] * 100).round(2).astype(str) + "%"
+            top5["str_annual_revenue_est"] = top5["str_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
+            top5.columns = [name_col_label, "Investment Score", "Short-Term Rental (STR) Yield",
+                             "Long-Term Rental (LTR) Yield", "Est. STR Revenue", "Total Listings"]
+
+            render_styled_table(top5, highlight_cols=["Investment Score"])
+
+# -----------------------------
+# MAP
+# -----------------------------
+elif st.session_state.score_page == "Map":
+
+    st.subheader("Investment Score by Area")
+
+    map_msoas = msoa_df[
+        msoa_df["city"].str.title().isin(cities) & msoa_df["lad_name"].isin(lads)
+    ].copy()
+
+    if msoa_geojson is None or map_msoas.empty:
+        st.info("No map data available for the selected areas.")
     else:
-        col1, col2, col3 = st.columns(3)
+        map_codes = set(map_msoas["msoa_code"])
+        filtered_geojson = {
+            "type": "FeatureCollection",
+            "features": [
+                f for f in msoa_geojson["features"]
+                if f["properties"].get("MSOA21CD") in map_codes
+            ],
+        }
 
-        with col1:
-            render_stat_card("Investment Score", best_area["investment_score"], unit="/ 100", big=True)
+        visible_cities = [c for c in cities if not map_msoas[map_msoas["city"].str.title() == c].empty]
+        map_cols = st.columns(len(visible_cities)) if visible_cities else []
 
-        with col2:
-            st.metric("Recommended Area", best_area["lad_name"])
-            st.metric("STR Yield", f"{best_area['str_gross_yield']:.2%}")
+        for col, city_name in zip(map_cols, visible_cities):
+            city_map_df = map_msoas[map_msoas["city"].str.title() == city_name].copy()
+            city_map_df["city"] = city_map_df["city"].str.title()
+            city_map_df["Investment Rank"] = city_map_df["investment_score"].rank(
+                ascending=False, method="min", na_option="bottom"
+            ).astype(int)
+            city_map_df["Estimated STR Revenue"] = city_map_df["str_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
+            city_map_df["Estimated LTR Revenue"] = city_map_df["ltr_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
+            city_map_df["Average Rating"] = city_map_df["avg_review_score"].round(2)
 
-        with col3:
-            st.metric("LTR Yield", f"{best_area['ltr_gross_yield']:.2%}")
-            st.metric("Estimated STR Revenue", f"£{best_area['str_annual_revenue_est']:,.0f}")
+            city_codes = set(city_map_df["msoa_code"])
+            coords = [
+                (f["properties"]["LAT"], f["properties"]["LONG"])
+                for f in filtered_geojson["features"]
+                if f["properties"].get("MSOA21CD") in city_codes
+                and "LAT" in f["properties"] and "LONG" in f["properties"]
+            ]
+            center = (
+                {"lat": sum(c[0] for c in coords) / len(coords), "lon": sum(c[1] for c in coords) / len(coords)}
+                if coords else {"lat": 52.5, "lon": -1.5}
+            )
 
-        st.subheader("Top 5 Districts (LAD)")
+            with col:
+                st.markdown(f"<p style='font-weight:600;margin-bottom:8px;'>{city_name}</p>", unsafe_allow_html=True)
 
-        top5 = city_df.sort_values("investment_score", ascending=False).head(5)[
-            ["lad_name", "investment_score", "str_gross_yield", "ltr_gross_yield",
-             "str_annual_revenue_est", "total_listings"]
-        ].copy()
-        top5["investment_score"] = top5["investment_score"].round(1)
-        top5["str_gross_yield"] = (top5["str_gross_yield"] * 100).round(2).astype(str) + "%"
-        top5["ltr_gross_yield"] = (top5["ltr_gross_yield"] * 100).round(2).astype(str) + "%"
-        top5["str_annual_revenue_est"] = top5["str_annual_revenue_est"].apply(lambda x: f"£{x:,.0f}")
-        top5.columns = ["Local Authority District", "Investment Score", "STR Yield",
-                         "LTR Yield", "Est. STR Revenue", "Total Listings"]
-
-        render_styled_table(top5, highlight_cols=["Investment Score"])
+                hover_cols = [
+                    "city", "total_listings", "Investment Rank", "investment_score",
+                    "Estimated STR Revenue", "Estimated LTR Revenue", "Average Rating",
+                ]
+                fig = px.choropleth_map(
+                    city_map_df,
+                    geojson=filtered_geojson,
+                    locations="msoa_code",
+                    featureidkey="properties.MSOA21CD",
+                    color="investment_score",
+                    color_continuous_scale=[[0, "#E3EEEC"], [1, TEAL]],
+                    hover_name="msoa_name",
+                    custom_data=hover_cols,
+                    labels={"investment_score": "Investment Score"},
+                    map_style="carto-positron",
+                    center=center,
+                    zoom=9.3,
+                    opacity=0.85,
+                    height=460,
+                )
+                fig.update_traces(
+                    marker_line_width=1, marker_line_color="#ffffff",
+                    hovertemplate=(
+                        "<b>%{hovertext}</b><br>"
+                        "City - %{customdata[0]}<br>"
+                        "No. of Airbnb Listings - %{customdata[1]}<br>"
+                        "Investment Rank - %{customdata[2]}<br>"
+                        "Investment Score - %{customdata[3]:.1f}<br>"
+                        "Estimated STR Revenue - %{customdata[4]}<br>"
+                        "Estimated LTR Revenue - %{customdata[5]}<br>"
+                        "Average Rating - %{customdata[6]}"
+                        "<extra></extra>"
+                    ),
+                )
+                fig.update_layout(
+                    margin=dict(l=0, r=0, t=0, b=0),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    hoverlabel=dict(bgcolor="#ffffff", font_color="#1a1a1a", font_family="Inter", bordercolor=TEAL),
+                )
+                style_chart(fig)
+                fig.update_layout(coloraxis_colorbar=dict(title_font_color="#1a1a1a", tickfont_color="#1a1a1a"))
+                st.plotly_chart(fig, use_container_width=True, config={"scrollZoom": False})
 
 # -----------------------------
 # SCORE BREAKDOWN
@@ -339,6 +436,7 @@ elif st.session_state.score_page == "Score Breakdown":
                 "Yield Gap Score",
                 "Saturation Score",
                 "Review Score",
+                "LTR Yield Score",
             ],
             "Score": [
                 best_area["revenue_score"],
@@ -347,6 +445,7 @@ elif st.session_state.score_page == "Score Breakdown":
                 best_area["yield_gap_score"],
                 best_area["saturation_score"],
                 best_area["review_score"],
+                best_area["ltr_yield_score"],
             ]
         })
 
@@ -363,20 +462,25 @@ elif st.session_state.score_page == "Score Breakdown":
         st.plotly_chart(breakdown_fig, use_container_width=True)
 
         weights = PROFILES[selected_profile]["weights"]
-        metric_rows = "".join(f"""
-            <tr>
-                <td style="padding:10px 16px;font-weight:600;">{metric}</td>
-                <td style="padding:10px 16px;color:{t['text_muted']};">{desc}</td>
-                <td style="padding:10px 16px;text-align:right;font-weight:700;color:{TEAL};">{weights[wkey]*100:.0f}%</td>
-            </tr>
-        """ for metric, desc, wkey in [
+        # Built as single-line HTML (no embedded newlines/indentation) —
+        # pasting an independently-indented multi-line block into the
+        # middle of the outer f-string's HTML below confuses Streamlit's
+        # Markdown parser and it starts printing tags like </tbody> as
+        # literal text instead of rendering them.
+        metric_rows = "".join(
+            f'<tr><td style="padding:10px 16px;font-weight:600;">{metric}</td>'
+            f'<td style="padding:10px 16px;color:{t["text_muted"]};">{desc}</td>'
+            f'<td style="padding:10px 16px;text-align:right;font-weight:700;color:{TEAL};">{weights.get(wkey, 0)*100:.0f}%</td></tr>'
+            for metric, desc, wkey in [
             ("Revenue", "Estimated annual short-term rental income for the area", "revenue"),
             ("Occupancy", "How booked up the area's listings tend to be", "occupancy"),
             ("STR Yield", "Short-term rental income as a % of property value", "str_yield"),
             ("Yield Gap", "How much better STR yield is than long-term letting", "yield_gap"),
             ("Saturation", "Rewards areas with fewer competing listings", "saturation"),
             ("Reviews", "Average guest review score", "review"),
+            ("LTR Yield", "Long-term rental income as a % of property value", "ltr_yield"),
         ])
+
 
         st.markdown(
             f"""
@@ -410,12 +514,12 @@ elif st.session_state.score_page == "Score Breakdown":
 # -----------------------------
 elif st.session_state.score_page == "Compare Areas":
 
-    st.subheader(f"Compare Areas in {', '.join(cities)}")
+    st.subheader(f"Compare {name_col_label}s in {', '.join(cities)}")
 
-    ranked = city_df.sort_values("investment_score", ascending=False)
+    ranked = area_df.sort_values("investment_score", ascending=False)
 
     cols = [
-        "lad_name",
+        name_col,
         "investment_score",
         "str_gross_yield",
         "ltr_gross_yield",
@@ -440,8 +544,10 @@ elif st.session_state.score_page == "Compare Areas":
         ranked_display["avg_nightly_price"] = ranked_display["avg_nightly_price"].apply(lambda x: f"£{x:,.0f}")
     if "avg_review_score" in ranked_display.columns:
         ranked_display["avg_review_score"] = ranked_display["avg_review_score"].round(2)
+    ranked_display = ranked_display.rename(columns={name_col: name_col_label})
     ranked_display.columns = [
-        c.replace("_", " ").title().replace("Str", "STR").replace("Ltr", "LTR").replace("Lad", "LAD")
+        c if c == name_col_label else
+        c.replace("_", " ").title().replace("Str", "STR").replace("Ltr", "LTR").replace("Msoa", "MSOA").replace("Lad", "LAD")
         for c in ranked_display.columns
     ]
 
@@ -449,9 +555,9 @@ elif st.session_state.score_page == "Compare Areas":
 
     st.subheader("Investment Score Ranking")
     ranking_fig = px.bar(
-        ranked, x="lad_name", y="investment_score",
+        ranked, x=name_col, y="investment_score",
         color_discrete_sequence=[TEAL],
-        labels={"lad_name": "", "investment_score": "Investment Score"},
+        labels={name_col: "", "investment_score": "Investment Score"},
         template="plotly_white",
     )
     ranking_fig.update_layout(
@@ -471,11 +577,30 @@ elif st.session_state.score_page == "Recommendation":
     if best_area is None:
         st.warning("No recommendation available.")
     else:
-        st.success(f"Recommended Area: {best_area['lad_name']}")
+        area_name = best_area[name_col]
+        # City granularity has no separate "city" field to report — the
+        # recommended area IS the city in that case.
+        city_for_insight = area_name if name_col == "city" else best_area["city"].title()
+
+        st.success(f"Recommended {name_col_label}: {area_name}")
+
+        # When more than one candidate area is in play, also tell the AI
+        # about the lowest-ranked one so the write-up explains why it lost
+        # out, not just why the top pick won.
+        worst_area_stats = None
+        if len(area_df) > 1:
+            worst_row = area_df.sort_values("investment_score", ascending=True).iloc[0]
+            if worst_row[name_col] != area_name:
+                worst_area_stats = {
+                    "area_name": worst_row[name_col],
+                    "investment_score": worst_row["investment_score"],
+                    "str_yield": worst_row["str_gross_yield"],
+                    "saturation_score": worst_row["saturation_score"],
+                }
 
         insight = generate_insight(
-            area_name=best_area["lad_name"],
-            city=best_area["city"].title(),
+            area_name=area_name,
+            city=city_for_insight,
             budget=budget_max,
             stats={
                 "str_yield": best_area["str_gross_yield"],
@@ -484,12 +609,13 @@ elif st.session_state.score_page == "Recommendation":
                 "saturation_score": best_area["saturation_score"],
                 "investment_score": best_area["investment_score"],
             },
+            worst_area=worst_area_stats,
         )
 
         st.markdown(
             f"""
             <div class="card">
-            <h3>Why {best_area['lad_name']}?</h3>
+            <h3>Why {area_name}?</h3>
             <p>{insight}</p>
             </div>
             """,
@@ -506,6 +632,8 @@ elif st.session_state.score_page == "Risks":
     if best_area is None:
         st.warning("No risk data available.")
     else:
+        area_name = best_area[name_col]
+
         # Overall risk level
         if best_area["saturation_score"] < 40:
             overall_risk = "🔴 High"
@@ -520,7 +648,7 @@ elif st.session_state.score_page == "Risks":
         rc1, rc2 = st.columns(2)
 
         with rc1:
-            if best_area["total_listings"] > city_df["total_listings"].median():
+            if best_area["total_listings"] > area_df["total_listings"].median():
                 competition = "High 🔴"
             else:
                 competition = "Low 🟢"
@@ -588,7 +716,7 @@ Investors should consider:
         st.subheader("Risk Summary")
 
         st.markdown(f"""
-Although **{best_area['lad_name']}** achieved the highest investment score,
+Although **{area_name}** achieved the highest investment score,
 investors should consider the following risks:
 
 - Competition from nearby Airbnb properties
@@ -596,7 +724,7 @@ investors should consider the following risks:
 - Seasonal changes affecting occupancy
 - Changes in short-term rental regulations
 
-Overall, **{best_area['lad_name']}** offers strong investment potential,
+Overall, **{area_name}** offers strong investment potential,
 but returns depend on maintaining good occupancy and managing costs effectively.
 """)
 
@@ -606,7 +734,7 @@ but returns depend on maintaining good occupancy and managing costs effectively.
         st.subheader("Additional Risk Information")
         st.caption(
             "General guidance for UK short-term-let investing — not specific to "
-            f"{best_area['lad_name']} or calculated from this app's data."
+            f"{area_name} or calculated from this app's data."
         )
 
         with st.expander("🤖 AI Use & Data Policy"):
@@ -744,7 +872,7 @@ Common costs include:
         st.success(f"""
 ### Final Investor Takeaway
 
-**{best_area['lad_name']}** provides attractive investment potential,
+**{area_name}** provides attractive investment potential,
 but investors should balance expected returns against:
 
 - Market competition

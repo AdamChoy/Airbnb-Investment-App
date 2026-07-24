@@ -28,6 +28,12 @@ PROFILES = {
         "persona": "Top Rated is for hosts who want to build a strong reputation and prioritise guest experience over maximum profit.",
         "weights": {"revenue": 0.20, "occupancy": 0.15, "str_yield": 0.15, "yield_gap": 0.05, "saturation": 0.10, "review": 0.35},
     },
+    "low_maintenance": {
+        "label": "Low Maintenance",
+        "sentence": "Weights long-term rental yield most heavily, prioritising steady passive income over active short-term letting.",
+        "persona": "Low Maintenance is for investors who want a hands-off long-term let rather than the day-to-day work of running an Airbnb.",
+        "weights": {"revenue": 0.05, "occupancy": 0.05, "str_yield": 0.05, "yield_gap": 0.05, "saturation": 0.15, "review": 0.05, "ltr_yield": 0.60},
+    },
 }
 DEFAULT_PROFILE = "yield"
 
@@ -56,6 +62,10 @@ def add_investment_score(df, weights=None):
     df["yield_gap_score"] = normalise(df["str_vs_ltr_yield_delta"])
     df["saturation_score"] = 100 - normalise(df["total_listings"])
     df["review_score"] = normalise(df["avg_review_score"])
+    # Long-term rental yield in its own right — yield_gap only rewards STR
+    # outperforming LTR, which is the wrong direction for a profile that
+    # actually wants a strong LTR return (e.g. Low Maintenance).
+    df["ltr_yield_score"] = normalise(df["ltr_gross_yield"])
 
     df["investment_score"] = (
         weights["revenue"] * df["revenue_score"]
@@ -64,6 +74,7 @@ def add_investment_score(df, weights=None):
         + weights["yield_gap"] * df["yield_gap_score"]
         + weights["saturation"] * df["saturation_score"]
         + weights["review"] * df["review_score"]
+        + weights.get("ltr_yield", 0) * df["ltr_yield_score"]
     ).round(1)
 
     return df

@@ -26,8 +26,8 @@ def _get_api_key():
         return os.environ.get("OPENAI_API_KEY")
 
 
-def _static_fallback(area_name, city, budget, stats):
-    return (
+def _static_fallback(area_name, city, budget, stats, worst_area=None):
+    text = (
         f"Based on your search for **{city}** with a budget of **£{budget:,}**, "
         f"**{area_name}** has the highest investment score. It performs well "
         f"because it balances revenue potential, rental yield, demand, and "
@@ -35,6 +35,15 @@ def _static_fallback(area_name, city, budget, stats):
         f"LTR yield of {stats['ltr_yield']:.1%}, with an estimated annual STR "
         f"revenue of £{stats['str_revenue']:,.0f}."
     )
+    if worst_area:
+        text += (
+            f" By comparison, **{worst_area['area_name']}** ranked lowest of the areas "
+            f"you selected, with an investment score of {worst_area['investment_score']:.1f} "
+            f"versus {stats['investment_score']:.1f} — driven by a lower STR yield "
+            f"({worst_area['str_yield']:.1%}) and a weaker saturation score "
+            f"({worst_area['saturation_score']:.0f}/100)."
+        )
+    return text
 
 
 # TODO: remove once OPENAI_API_KEY is configured — these two constants exist
@@ -62,13 +71,17 @@ def is_filler(text: str) -> bool:
 
 
 @st.cache_data(show_spinner=False)
-def generate_insight(area_name: str, city: str, budget: int, stats: dict) -> str:
+def generate_insight(area_name: str, city: str, budget: int, stats: dict, worst_area: dict | None = None) -> str:
     """Return a short (3-4 sentence) write-up explaining why `area_name`
     was recommended, grounded only in `stats` (no invented numbers).
 
     stats expected keys: str_yield, ltr_yield, str_revenue, saturation_score,
-    investment_score. Cached per (area_name, city, budget, stats) so the
-    same recommendation isn't re-billed on every widget tweak.
+    investment_score. When multiple candidate areas were in play, pass the
+    lowest-ranked one as `worst_area` (keys: area_name, investment_score,
+    str_yield, saturation_score) so the write-up also explains why that one
+    was less desirable, not just why the top pick was good. Cached per
+    (area_name, city, budget, stats, worst_area) so the same recommendation
+    isn't re-billed on every widget tweak.
     """
     api_key = _get_api_key()
     if not api_key:
@@ -79,17 +92,31 @@ def generate_insight(area_name: str, city: str, budget: int, stats: dict) -> str
     except ImportError:
         return _FILLER_INSIGHT
 
+    comparison_block = ""
+    comparison_ask = ""
+    if worst_area:
+        comparison_block = f"""
+
+For comparison, the lowest-ranked area you considered, {worst_area['area_name']}:
+- Overall investment score (0-100): {worst_area['investment_score']:.1f}
+- STR gross yield: {worst_area['str_yield']:.1%}
+- Market saturation score (0-100, lower = more saturated): {worst_area['saturation_score']:.0f}"""
+        comparison_ask = (
+            f" Also explain briefly why {worst_area['area_name']} ranked lowest "
+            f"among the areas considered, using only the comparison figures given."
+        )
+
     prompt = f"""You are writing a short investment insight for a property
 investment app. Using ONLY the figures below — do not invent any numbers —
-write 3-4 plain-language sentences explaining why {area_name} in {city} is a
-good short-term-rental investment for a budget of £{budget:,}.
+write 3-5 plain-language sentences explaining why {area_name} in {city} is a
+good short-term-rental investment for a budget of £{budget:,}.{comparison_ask}
 
 Figures:
 - STR gross yield: {stats['str_yield']:.1%}
 - LTR gross yield: {stats['ltr_yield']:.1%}
 - Estimated annual STR revenue: £{stats['str_revenue']:,.0f}
 - Market saturation score (0-100, lower = more saturated): {stats['saturation_score']:.0f}
-- Overall investment score (0-100): {stats['investment_score']:.1f}
+- Overall investment score (0-100): {stats['investment_score']:.1f}{comparison_block}
 
 Write for a first-time property investor. No headers, no bullet points,
 just the sentences."""
@@ -98,13 +125,13 @@ just the sentences."""
         client = openai.OpenAI(api_key=api_key)
         response = client.chat.completions.create(
             model=MODEL,
-            max_tokens=220,
+            max_tokens=260,
             messages=[{"role": "user", "content": prompt}],
         )
         return response.choices[0].message.content.strip()
     except Exception:
         # Network/quota/API errors: never break the demo, just fall back.
-        return _static_fallback(area_name, city, budget, stats)
+        return _static_fallback(area_name, city, budget, stats, worst_area)
 
 
 @st.cache_data(show_spinner=False)
